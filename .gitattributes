@@ -1,0 +1,15 @@
+# Normalise line endings to LF in the repository and in the working tree.
+# Development happens on Windows, CI runs on Linux, and Prettier's endOfLine
+# default is "lf" — without this, `format:check` fails on CI for files that are
+# fine locally, or the reverse.
+* text=auto eol=lf
+
+# Binary files git should never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

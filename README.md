@@ -8,6 +8,9 @@ The interesting constraint is that **thrift stock is one of one**. Every item ha
 two buyers must never be able to pay for the same jacket. That drives most of the design decisions
 below.
 
+**Live:** https://thrift-shop-jezreel-xs-projects.vercel.app ·
+**Health:** [`/api/health`](https://thrift-shop-jezreel-xs-projects.vercel.app/api/health)
+
 > **Status:** Phase 0 — foundation. The app is deployed and connected to Postgres; the catalogue
 > lands in Phase 1.
 
@@ -33,7 +36,7 @@ there is no separate backend service to run or deploy at this size.
 Requires Node 24+ and a PostgreSQL connection string.
 
 ```bash
-git clone https://github.com/<owner>/thrift-shop.git
+git clone https://github.com/jezreel-x/thrift-shop.git
 cd thrift-shop
 npm install            # postinstall runs `prisma generate`
 cp .env.example .env   # then fill in DATABASE_URL

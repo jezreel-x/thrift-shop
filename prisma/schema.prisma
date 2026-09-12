@@ -1,7 +1,10 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Thrift Shop — data model.
+//
+// The governing constraint of this domain is that every item is one of one.
+// There is no quantity column anywhere, and there never should be: a product
+// row IS the garment. That is what makes `status` load-bearing rather than
+// decorative, and it is why two buyers reaching checkout at the same moment is
+// a correctness problem instead of an inventory one.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +13,170 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ----------------------------- Enums -----------------------------
+
+// The shelf an item sits on. Deliberately a small, closed vocabulary rather
+// than a Category table: these do not change with the seasons, and an enum
+// gives exhaustive checking in TypeScript, so a new category cannot be added
+// without the filter UI being updated to render it. The upgrade path, if the
+// owner ever needs to manage her own categories, is a table — but paying for
+// that flexibility now buys nothing.
+enum Category {
+  TOPS
+  BOTTOMS
+  DRESSES
+  OUTERWEAR
+  SHOES
+  BAGS
+  ACCESSORIES
+}
+
+// Condition is the single biggest driver of price and of returns complaints in
+// secondhand clothing, so it is a closed set rather than free text. Four grades
+// is the most a buyer can meaningfully distinguish from photographs.
+enum Condition {
+  NEW_WITH_TAGS
+  EXCELLENT
+  GOOD
+  FAIR
+}
+
+// AVAILABLE -> RESERVED -> SOLD is the happy path. RESERVED is temporary and
+// always carries an expiry (see Product.reservedUntil); a reservation that
+// lapses returns to AVAILABLE. SOLD is terminal.
+enum ProductStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+// ---------------------------- Models -----------------------------
+
+model Product {
+  id String @id @default(cuid())
+
+  // The URL segment: /products/vintage-levis-501-straight-w32. Server rendering
+  // is the entire reason this project uses Next.js, and a readable slug is a
+  // meaningful part of what search engines reward — an opaque cuid in the URL
+  // would waste most of that advantage. Generated from the title, with a short
+  // suffix when two items collide, because "black leather jacket" will recur.
+  slug String @unique
+
+  title       String
+  description String?
+
+  // Brand drives search in secondhand clothing more than any field except size:
+  // people hunt for Levi's and Nike by name. Nullable because plenty of thrift
+  // stock has no legible label left.
+  brand String?
+
+  // Integer minor units (KES cents), never a float. See src/lib/money.ts for the
+  // reasoning and the parsing rules.
+  priceCents Int
+
+  // Free text rather than an enum, and the heterogeneity is the reason: this one
+  // column has to hold "M", "UK 8" and "W32 L34" depending on what the item is.
+  // A database enum would need a migration the first time she stocks a size
+  // system nobody anticipated. The allowed values per category are pinned in
+  // TypeScript instead, so writes stay clean without the schema having to know.
+  //
+  // Buyers filter by size before anything else, hence the composite index below.
+  size String
+
+  category  Category
+  condition Condition
+
+  status ProductStatus @default(AVAILABLE)
+
+  // When the current reservation lapses. Non-null only while status is RESERVED.
+  // The conditional-update reservation and the sweep that releases expired holds
+  // arrive in Phase 2; the column lives here because a RESERVED row without an
+  // expiry is an item lost from the catalogue forever, and the enum already
+  // admits that state.
+  reservedUntil DateTime?
+
+  images        ProductImage[]
+  statusHistory ProductStatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Soft delete. A mis-deleted item is recoverable, and an item that has been
+  // sold must not vanish from the order that sold it. Every catalogue query
+  // filters on `deletedAt: null`.
+  deletedAt DateTime?
+
+  // The catalogue's own query is "available items, filtered, newest first", so
+  // status leads every composite index. Size comes second because it is the
+  // filter buyers reach for first.
+  @@index([status, size])
+  @@index([status, category])
+  @@index([status, priceCents])
+  @@index([status, createdAt])
+  @@index([deletedAt])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Where the image is served from.
+  url String
+
+  // The storage key. Held separately from the URL because deleting a blob needs
+  // the key, and parsing it back out of a URL is the kind of thing that works
+  // until the provider changes its URL format.
+  pathname String @unique
+
+  // Empty alt is a legitimate choice for a purely decorative image, but a
+  // product photo is never decorative, so this should always be filled in.
+  alt String?
+
+  // Intrinsic dimensions, stored so <Image> can reserve space before the file
+  // loads. Without them the page reflows as each photo arrives, which is a Core
+  // Web Vitals penalty and looks broken on a phone.
+  width  Int
+  height Int
+
+  // Display order. Position 0 is the card thumbnail — the single most important
+  // image, and a choice the owner makes rather than upload order deciding.
+  position Int @default(0)
+
+  // SHA-256 of the file, computed in the browser before upload and used as the
+  // storage path. Re-uploading the same photo therefore overwrites rather than
+  // duplicates, which makes a double-submitted form idempotent instead of
+  // expensive.
+  checksum String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, position])
+  @@index([checksum])
+}
+
+// An append-only record of every status transition.
+//
+// `status` on Product is overwritten in place, so without this the answer to
+// "when did this sell, and what moved it?" is unrecoverable. That question gets
+// asked during payment disputes, which is exactly when reconstructing it from
+// memory is least convincing.
+model ProductStatusHistory {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Null on the first row, which records the item entering the catalogue.
+  fromStatus ProductStatus?
+  toStatus   ProductStatus
+
+  // Free text: "payment confirmed", "reservation expired", "returned by buyer".
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
 }

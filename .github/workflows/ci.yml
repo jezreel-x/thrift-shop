@@ -16,11 +16,31 @@ jobs:
     name: Typecheck, lint and test
     runs-on: ubuntu-latest
 
+    # Integration tests run against a real Postgres, not a mock. The version
+    # matches Neon's so a query that passes here behaves the same in production.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: thrift
+          POSTGRES_PASSWORD: thrift
+          POSTGRES_DB: thrift_shop_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U thrift -d thrift_shop_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
     env:
       # The build compiles routes that import the Prisma client but never opens a
       # connection, so a syntactically valid placeholder is enough here. Real
       # credentials live in the Vercel project settings.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # The throwaway database above. Its name ends in _test, which the
+      # integration suite insists on before it will truncate anything.
+      TEST_DATABASE_URL: postgresql://thrift:thrift@localhost:5433/thrift_shop_test
 
     steps:
       - uses: actions/checkout@v5
@@ -46,6 +66,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Integration test
+        run: npm run test:integration
 
       - name: Build
         run: npm run build

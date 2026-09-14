@@ -26,7 +26,7 @@ jobs:
           POSTGRES_PASSWORD: thrift
           POSTGRES_DB: thrift_shop_test
         ports:
-          - 5433:5432
+          - 5434:5432
         options: >-
           --health-cmd "pg_isready -U thrift -d thrift_shop_test"
           --health-interval 2s
@@ -40,7 +40,7 @@ jobs:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       # The throwaway database above. Its name ends in _test, which the
       # integration suite insists on before it will truncate anything.
-      TEST_DATABASE_URL: postgresql://thrift:thrift@localhost:5433/thrift_shop_test
+      TEST_DATABASE_URL: postgresql://thrift:thrift@localhost:5434/thrift_shop_test
 
     steps:
       - uses: actions/checkout@v5

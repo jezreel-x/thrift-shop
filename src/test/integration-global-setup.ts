@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 /**
  * Prepares the integration-test database once, before any test file runs.
@@ -11,11 +14,32 @@ import { execFileSync } from "node:child_process";
 export default function setup() {
   const url = requireTestDatabaseUrl();
 
-  execFileSync("npx", ["prisma", "migrate", "deploy"], {
+  execFileSync(process.execPath, [prismaCliPath(), "migrate", "deploy"], {
     env: { ...process.env, DATABASE_URL: url, DIRECT_DATABASE_URL: url },
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
+}
+
+/**
+ * The path to Prisma's CLI entry point, run directly with the current Node
+ * binary.
+ *
+ * The obvious `execFileSync("npx", ...)` needs `shell: true` on Windows, where
+ * the launcher is a .cmd file — and Node deprecated that combination because
+ * arguments reaching a shell are concatenated rather than escaped. Resolving the
+ * package's own bin target sidesteps the shell completely, and works the same on
+ * every platform.
+ */
+function prismaCliPath(): string {
+  const require = createRequire(import.meta.url);
+  const manifestPath = require.resolve("prisma/package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    bin: string | Record<string, string>;
+  };
+
+  const entry = typeof manifest.bin === "string" ? manifest.bin : manifest.bin.prisma;
+
+  return join(dirname(manifestPath), entry);
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Category, Condition } from "@/generated/prisma/enums";
+import type { Category, Condition, Gender } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "./prisma";
 
@@ -19,6 +19,7 @@ export type ProductFilters = {
   sizes?: string[];
   categories?: Category[];
   conditions?: Condition[];
+  genders?: Gender[];
   minPriceCents?: number;
   maxPriceCents?: number;
   /** Matched against title, brand and description. */
@@ -42,6 +43,7 @@ const cardSelect = {
   size: true,
   category: true,
   condition: true,
+  gender: true,
   status: true,
   createdAt: true,
   images: {
@@ -121,12 +123,13 @@ export async function listProductSlugs(): Promise<string[]> {
 }
 
 function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
-  const { sizes, categories, conditions, minPriceCents, maxPriceCents, search } = filters;
+  const { sizes, categories, conditions, genders, minPriceCents, maxPriceCents, search } = filters;
   const where: Prisma.ProductWhereInput = { deletedAt: null };
 
   if (sizes?.length) where.size = { in: sizes };
   if (categories?.length) where.category = { in: categories };
   if (conditions?.length) where.condition = { in: conditions };
+  if (genders?.length) where.gender = { in: genders };
 
   if (minPriceCents !== undefined || maxPriceCents !== undefined) {
     where.priceCents = {

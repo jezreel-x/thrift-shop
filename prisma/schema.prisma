@@ -17,20 +17,38 @@ datasource db {
 
 // ----------------------------- Enums -----------------------------
 
-// The shelf an item sits on. Deliberately a small, closed vocabulary rather
-// than a Category table: these do not change with the seasons, and an enum
-// gives exhaustive checking in TypeScript, so a new category cannot be added
-// without the filter UI being updated to render it. The upgrade path, if the
-// owner ever needs to manage her own categories, is a table — but paying for
-// that flexibility now buys nothing.
+// The shop's actual range, garment by garment.
+//
+// Deliberately not broad shelves like TOPS and BOTTOMS. "Hoodies" is something
+// people search for; "tops" is not, and flattening hoodies, sweatshirts,
+// flannels and T-shirts into one bucket would discard exactly the distinction
+// buyers browse by.
+//
+// A closed enum rather than a Category table: the range changes rarely, and
+// exhaustive checking in TypeScript means a category cannot be added without
+// every filter and label that renders it being updated too. The upgrade path,
+// if the owner ever needs to manage her own categories, is a table — but paying
+// for that flexibility now buys nothing.
 enum Category {
-  TOPS
-  BOTTOMS
-  DRESSES
-  OUTERWEAR
-  SHOES
-  BAGS
-  ACCESSORIES
+  HOODIES
+  SWEATSHIRTS
+  T_SHIRTS
+  FLANNELS
+  SWEATPANTS
+  WIDE_LEG_SWEATPANTS
+  SIDE_POCKET_PANTS
+  UNDERWEAR
+}
+
+// Who a garment is cut for.
+//
+// Not a statement about who may buy it: UNISEX is a common and advertised
+// answer in this stock. Recorded because it is the filter buyers reach for
+// immediately after size.
+enum Gender {
+  MENS
+  WOMENS
+  UNISEX
 }
 
 // Condition is the single biggest driver of price and of returns complaints in
@@ -76,17 +94,22 @@ model Product {
   // reasoning and the parsing rules.
   priceCents Int
 
-  // Free text rather than an enum, and the heterogeneity is the reason: this one
-  // column has to hold "M", "UK 8" and "W32 L34" depending on what the item is.
-  // A database enum would need a migration the first time she stocks a size
-  // system nobody anticipated. The allowed values per category are pinned in
-  // TypeScript instead, so writes stay clean without the schema having to know.
+  // Free text rather than an enum. The current range is letter-sized throughout,
+  // but one column has to be able to hold "M", "W32" and "UK 8" the moment she
+  // stocks jeans or shoes — and a database enum would make each of those a
+  // migration. The permitted values per category are pinned in TypeScript
+  // instead, so writes stay clean without the schema having to know what a size
+  // is.
   //
   // Buyers filter by size before anything else, hence the composite index below.
   size String
 
   category  Category
   condition Condition
+
+  // Cut, not audience. The shop advertises men's, women's and unisex stock
+  // explicitly, and this is the filter buyers want directly after size.
+  gender Gender
 
   status ProductStatus @default(AVAILABLE)
 
@@ -113,6 +136,7 @@ model Product {
   // filter buyers reach for first.
   @@index([status, size])
   @@index([status, category])
+  @@index([status, gender])
   @@index([status, priceCents])
   @@index([status, createdAt])
   @@index([deletedAt])

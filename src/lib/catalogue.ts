@@ -1,55 +1,35 @@
-import { Category, Condition, ProductStatus } from "@/generated/prisma/enums";
+import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
 
 /**
  * The catalogue's controlled vocabulary.
  *
- * `Product.size` is a plain string in the database — one column has to hold
- * "M", "UK 8" and "W32" depending on what the garment is, and a database enum
- * would need a migration the first time the shop stocks a size system nobody
- * anticipated. The permitted values live here instead: writes are validated
- * against this list, so the data stays clean enough to filter on without the
- * schema having to know what a size is.
+ * `Product.size` is a plain string in the database — the moment the shop stocks
+ * jeans or shoes, one column has to hold "M", "W32" and "UK 8" alike, and a
+ * database enum would make each of those a migration. The permitted values live
+ * here instead: writes are validated against this list, so the data stays clean
+ * enough to filter on without the schema having to know what a size is.
  */
 
 const LETTER_SIZES = ["XS", "S", "M", "L", "XL", "XXL"] as const;
 
-/** Jeans and trousers are sold by waist measurement far more often than by letter. */
-const WAIST_SIZES = ["W26", "W28", "W30", "W32", "W34", "W36", "W38", "W40"] as const;
-
-/** UK dress sizes, which is what Nairobi thrift stock is almost always labelled in. */
-const DRESS_SIZES = ["UK 6", "UK 8", "UK 10", "UK 12", "UK 14", "UK 16", "UK 18", "UK 20"] as const;
-
-const SHOE_SIZES = [
-  "UK 3",
-  "UK 4",
-  "UK 5",
-  "UK 6",
-  "UK 7",
-  "UK 8",
-  "UK 9",
-  "UK 10",
-  "UK 11",
-  "UK 12",
-] as const;
-
-const ONE_SIZE = ["One size"] as const;
-
 /**
  * Which sizes are offered for each category.
  *
- * Note that "UK 8" means a dress size under DRESSES and a shoe size under
- * SHOES. That ambiguity is harmless while the size filter is scoped to a
- * chosen category, and it is the reason the listing page groups sizes by
- * category rather than presenting one flat list.
+ * Every current category is letter-sized, so this map is uniform today and the
+ * repetition is deliberate rather than accidental. It is kept per-category
+ * because the first pair of jeans ("W32") or shoes ("UK 9") breaks the
+ * uniformity, and that arrives as data in this file rather than as a change to
+ * how sizing works.
  */
 export const SIZES_BY_CATEGORY: Record<Category, readonly string[]> = {
-  [Category.TOPS]: LETTER_SIZES,
-  [Category.BOTTOMS]: [...LETTER_SIZES, ...WAIST_SIZES],
-  [Category.DRESSES]: [...LETTER_SIZES, ...DRESS_SIZES],
-  [Category.OUTERWEAR]: LETTER_SIZES,
-  [Category.SHOES]: SHOE_SIZES,
-  [Category.BAGS]: ONE_SIZE,
-  [Category.ACCESSORIES]: ONE_SIZE,
+  [Category.HOODIES]: LETTER_SIZES,
+  [Category.SWEATSHIRTS]: LETTER_SIZES,
+  [Category.T_SHIRTS]: LETTER_SIZES,
+  [Category.FLANNELS]: LETTER_SIZES,
+  [Category.SWEATPANTS]: LETTER_SIZES,
+  [Category.WIDE_LEG_SWEATPANTS]: LETTER_SIZES,
+  [Category.SIDE_POCKET_PANTS]: LETTER_SIZES,
+  [Category.UNDERWEAR]: LETTER_SIZES,
 };
 
 /** True when `size` is one of the values permitted for `category`. */
@@ -68,13 +48,20 @@ export function allSizes(): string[] {
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {
-  [Category.TOPS]: "Tops",
-  [Category.BOTTOMS]: "Bottoms",
-  [Category.DRESSES]: "Dresses",
-  [Category.OUTERWEAR]: "Outerwear",
-  [Category.SHOES]: "Shoes",
-  [Category.BAGS]: "Bags",
-  [Category.ACCESSORIES]: "Accessories",
+  [Category.HOODIES]: "Hoodies",
+  [Category.SWEATSHIRTS]: "Sweatshirts",
+  [Category.T_SHIRTS]: "T-shirts",
+  [Category.FLANNELS]: "Flannels",
+  [Category.SWEATPANTS]: "Sweatpants",
+  [Category.WIDE_LEG_SWEATPANTS]: "Wide-leg sweatpants",
+  [Category.SIDE_POCKET_PANTS]: "Side-pocket pants",
+  [Category.UNDERWEAR]: "Underwear",
+};
+
+export const GENDER_LABELS: Record<Gender, string> = {
+  [Gender.MENS]: "Men's",
+  [Gender.WOMENS]: "Women's",
+  [Gender.UNISEX]: "Unisex",
 };
 
 /**
@@ -94,8 +81,20 @@ export const STATUS_LABELS: Record<ProductStatus, string> = {
   [ProductStatus.SOLD]: "Sold",
 };
 
-/** Categories in the order the listing page should offer them. */
-export const CATEGORIES = Object.values(Category);
+/**
+ * Categories in the order the listing page should offer them — tops first, then
+ * bottoms, then underwear, which is roughly how the shop describes itself.
+ */
+export const CATEGORIES = [
+  Category.HOODIES,
+  Category.SWEATSHIRTS,
+  Category.T_SHIRTS,
+  Category.FLANNELS,
+  Category.SWEATPANTS,
+  Category.WIDE_LEG_SWEATPANTS,
+  Category.SIDE_POCKET_PANTS,
+  Category.UNDERWEAR,
+] as const;
 
 /** Conditions from best to worst, which is the order a filter should list them in. */
 export const CONDITIONS = [
@@ -104,3 +103,5 @@ export const CONDITIONS = [
   Condition.GOOD,
   Condition.FAIR,
 ] as const;
+
+export const GENDERS = [Gender.MENS, Gender.WOMENS, Gender.UNISEX] as const;

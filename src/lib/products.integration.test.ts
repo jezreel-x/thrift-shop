@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { Category, Condition, ProductStatus } from "@/generated/prisma/enums";
+import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
 import { db, cleanDatabaseBetweenTests } from "@/test/db";
 import { PAGE_SIZE, getProductBySlug, listProductSlugs, listProducts } from "./products";
 
@@ -26,8 +26,9 @@ async function makeProduct(
       title: `Product ${sequence}`,
       priceCents: 100_000,
       size: "M",
-      category: Category.TOPS,
+      category: Category.T_SHIRTS,
       condition: Condition.GOOD,
+      gender: Gender.UNISEX,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       ...overrides,
     },
@@ -86,55 +87,73 @@ describe("listProducts — what is visible", () => {
 describe("listProducts — filters", () => {
   beforeEach(async () => {
     await makeProduct({
-      slug: "levis-w32",
-      title: "Levi's 501 straight",
-      brand: "Levi's",
-      description: "Classic straight leg denim",
+      slug: "grey-hoodie-l",
+      title: "Grey Nike hoodie",
+      brand: "Nike",
+      description: "Heavyweight fleece, barely worn",
       priceCents: 250_000,
-      size: "W32",
-      category: Category.BOTTOMS,
+      size: "L",
+      category: Category.HOODIES,
       condition: Condition.EXCELLENT,
+      gender: Gender.UNISEX,
     });
     await makeProduct({
-      slug: "nike-tee-m",
-      title: "Nike training tee",
-      brand: "Nike",
-      description: "Lightweight running top",
+      slug: "black-tee-m",
+      title: "Black Adidas tee",
+      brand: "Adidas",
+      description: "Lightweight cotton, no marks",
       priceCents: 80_000,
       size: "M",
-      category: Category.TOPS,
+      category: Category.T_SHIRTS,
       condition: Condition.GOOD,
+      gender: Gender.WOMENS,
     });
     await makeProduct({
-      slug: "leather-jacket-l",
-      title: "Black leather jacket",
+      slug: "wide-leg-sweats-xl",
+      title: "Wide-leg sweatpants",
       brand: null,
-      description: "Heavy biker jacket, minor scuffing",
+      description: "Faded black, minor pilling at the cuffs",
       priceCents: 600_000,
-      size: "L",
-      category: Category.OUTERWEAR,
+      size: "XL",
+      category: Category.WIDE_LEG_SWEATPANTS,
       condition: Condition.FAIR,
+      gender: Gender.MENS,
     });
   });
 
   it("filters by size", async () => {
-    const { items } = await listProducts({ filters: { sizes: ["W32"] } });
+    const { items } = await listProducts({ filters: { sizes: ["M"] } });
 
-    expect(items.map((item) => item.slug)).toEqual(["levis-w32"]);
+    expect(items.map((item) => item.slug)).toEqual(["black-tee-m"]);
   });
 
   it("treats several sizes as alternatives, not as a narrowing", async () => {
     const { items } = await listProducts({ filters: { sizes: ["M", "L"] } });
 
-    expect(items.map((item) => item.slug).sort()).toEqual(["leather-jacket-l", "nike-tee-m"]);
+    expect(items.map((item) => item.slug).sort()).toEqual(["black-tee-m", "grey-hoodie-l"]);
   });
 
   it("filters by category and by condition", async () => {
-    const byCategory = await listProducts({ filters: { categories: [Category.TOPS] } });
-    expect(byCategory.items.map((item) => item.slug)).toEqual(["nike-tee-m"]);
+    const byCategory = await listProducts({ filters: { categories: [Category.T_SHIRTS] } });
+    expect(byCategory.items.map((item) => item.slug)).toEqual(["black-tee-m"]);
 
     const byCondition = await listProducts({ filters: { conditions: [Condition.FAIR] } });
-    expect(byCondition.items.map((item) => item.slug)).toEqual(["leather-jacket-l"]);
+    expect(byCondition.items.map((item) => item.slug)).toEqual(["wide-leg-sweats-xl"]);
+  });
+
+  it("filters by gender", async () => {
+    const { items } = await listProducts({ filters: { genders: [Gender.WOMENS] } });
+
+    expect(items.map((item) => item.slug)).toEqual(["black-tee-m"]);
+  });
+
+  it("treats unisex stock as its own value, not as matching everything", async () => {
+    // A buyer filtering for women's stock is asking what is cut for them. Unisex
+    // items are a separate answer the UI can offer alongside, not something the
+    // query should silently fold in.
+    const { items } = await listProducts({ filters: { genders: [Gender.MENS] } });
+
+    expect(items.map((item) => item.slug)).toEqual(["wide-leg-sweats-xl"]);
   });
 
   it("filters by price range, inclusive at both ends", async () => {
@@ -142,13 +161,13 @@ describe("listProducts — filters", () => {
       filters: { minPriceCents: 80_000, maxPriceCents: 250_000 },
     });
 
-    expect(items.map((item) => item.slug).sort()).toEqual(["levis-w32", "nike-tee-m"]);
+    expect(items.map((item) => item.slug).sort()).toEqual(["black-tee-m", "grey-hoodie-l"]);
   });
 
   it("accepts a lower bound without an upper one", async () => {
     const { items } = await listProducts({ filters: { minPriceCents: 300_000 } });
 
-    expect(items.map((item) => item.slug)).toEqual(["leather-jacket-l"]);
+    expect(items.map((item) => item.slug)).toEqual(["wide-leg-sweats-xl"]);
   });
 
   it("narrows when filters are combined across facets", async () => {
@@ -156,18 +175,18 @@ describe("listProducts — filters", () => {
       filters: { sizes: ["M", "L"], conditions: [Condition.GOOD] },
     });
 
-    expect(items.map((item) => item.slug)).toEqual(["nike-tee-m"]);
+    expect(items.map((item) => item.slug)).toEqual(["black-tee-m"]);
   });
 
   it("searches title, brand and description, ignoring case", async () => {
-    const byTitle = await listProducts({ filters: { search: "LEATHER" } });
-    expect(byTitle.items.map((item) => item.slug)).toEqual(["leather-jacket-l"]);
+    const byTitle = await listProducts({ filters: { search: "HOODIE" } });
+    expect(byTitle.items.map((item) => item.slug)).toEqual(["grey-hoodie-l"]);
 
-    const byBrand = await listProducts({ filters: { search: "nike" } });
-    expect(byBrand.items.map((item) => item.slug)).toEqual(["nike-tee-m"]);
+    const byBrand = await listProducts({ filters: { search: "adidas" } });
+    expect(byBrand.items.map((item) => item.slug)).toEqual(["black-tee-m"]);
 
-    const byDescription = await listProducts({ filters: { search: "denim" } });
-    expect(byDescription.items.map((item) => item.slug)).toEqual(["levis-w32"]);
+    const byDescription = await listProducts({ filters: { search: "pilling" } });
+    expect(byDescription.items.map((item) => item.slug)).toEqual(["wide-leg-sweats-xl"]);
   });
 
   it("ignores a blank search rather than matching nothing", async () => {
@@ -177,7 +196,7 @@ describe("listProducts — filters", () => {
   });
 
   it("returns an empty page, not an error, when nothing matches", async () => {
-    const { items, total, pageCount } = await listProducts({ filters: { sizes: ["UK 12"] } });
+    const { items, total, pageCount } = await listProducts({ filters: { sizes: ["XS"] } });
 
     expect(items).toEqual([]);
     expect(total).toBe(0);

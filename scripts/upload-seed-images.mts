@@ -77,6 +77,14 @@ async function main() {
   requireBlobToken();
 
   const existing = await readManifest();
+  // Alt text, keyed by the image it describes. Re-running must not discard a
+  // description someone wrote by hand, and the content hash is what identifies
+  // "the same photograph" across runs.
+  const altByChecksum = new Map(
+    [...existing.values()].flatMap((item) =>
+      item.images.map((image) => [image.checksum, image.alt] as const),
+    ),
+  );
   const items: ManifestItem[] = [];
 
   for (const categoryFolder of await subdirectories(SOURCE_DIR)) {
@@ -109,7 +117,7 @@ async function main() {
 
       const images: ManifestImage[] = [];
       for (const [index, file] of files.entries()) {
-        images.push(await uploadOne(join(garmentPath, file), title, index));
+        images.push(await uploadOne(join(garmentPath, file), title, index, altByChecksum));
       }
 
       items.push({
@@ -158,7 +166,12 @@ async function main() {
  * resized down to MAX_EDGE, never up. And it is re-encoded as WebP, which for
  * clothing photography is roughly a third the size of the equivalent JPEG.
  */
-async function uploadOne(path: string, title: string, index: number): Promise<ManifestImage> {
+async function uploadOne(
+  path: string,
+  title: string,
+  index: number,
+  altByChecksum: Map<string, string>,
+): Promise<ManifestImage> {
   const original = await readFile(path);
 
   const normalised = await sharp(original)
@@ -190,9 +203,10 @@ async function uploadOne(path: string, title: string, index: number): Promise<Ma
     checksum,
     width: normalised.info.width,
     height: normalised.info.height,
-    // A real alt text belongs to whoever writes the listing; this is a floor,
-    // not a ceiling. An empty alt on a product photo would be worse.
-    alt: index === 0 ? title : `${title}, view ${index + 1}`,
+    // Derived from the title as a floor, not a ceiling — an empty alt on a
+    // product photo would be worse. Anything written by hand in a previous run
+    // wins, since that is someone describing the garment rather than a template.
+    alt: altByChecksum.get(checksum) ?? (index === 0 ? title : `${title}, view ${index + 1}`),
   };
 }
 

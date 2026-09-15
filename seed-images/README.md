@@ -38,10 +38,32 @@ seed-images/
   `underwear`.
 - **Garment folder** names the item, and becomes its URL slug. Use words:
   `grey-nike-hoodie`, not `IMG_4471`.
-- **File names** set the display order. `1.jpg` is the card thumbnail; the rest
-  follow in numeric order.
+- **File names** are free-form. Photos are sorted by filename, and the first one
+  becomes the card thumbnail.
 
 Accepted formats: JPEG, PNG, WebP, HEIC.
+
+### Getting the order right
+
+Sorting is numeric-aware, so `9.jpg` comes before `10.jpg` rather than after it,
+and files straight off a phone or out of WhatsApp already sort into the order
+they were taken:
+
+```
+IMG_4471.jpg  IMG_4472.jpg  IMG_4480.jpg          ← capture order, fine as-is
+1.jpg  2.jpg  10.jpg                              ← fine
+01-front.jpg  02-back.jpg  03-detail.jpg          ← fine
+```
+
+The one thing that catches people out is naming photos after what they show:
+
+```
+front.jpg  back.jpg  detail.jpg                   ← sorts to back, detail, front
+```
+
+Alphabetical order has nothing to do with which photo should lead, so the back
+of the garment ends up as the thumbnail. Put a number in front if you want
+words: `01-front.jpg`.
 
 ## How many
 

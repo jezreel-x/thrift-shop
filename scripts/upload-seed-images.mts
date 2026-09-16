@@ -86,6 +86,8 @@ async function main() {
     ),
   );
   const items: ManifestItem[] = [];
+  /** Which folder claimed each slug, so a collision can name both sides. */
+  const slugSources = new Map<string, string>();
 
   for (const categoryFolder of await subdirectories(SOURCE_DIR)) {
     const category = CATEGORY_BY_FOLDER[categoryFolder];
@@ -112,6 +114,22 @@ async function main() {
       }
 
       const slug = slugify(garmentFolder);
+
+      // Slugs are global, but garment folders are only unique within their
+      // category — so t-shirts/black and hoodies/black both want "black", and
+      // the second would silently overwrite the first at seed time. Caught here,
+      // where the two folders can be named, rather than as a puzzling duplicate
+      // later on.
+      const claimedBy = slugSources.get(slug);
+      if (claimedBy) {
+        throw new Error(
+          `Two garments both want the URL "${slug}":\n  ${claimedBy}\n  ${garmentPath}\n\n` +
+            `Rename one of them to something a buyer would recognise — "black-t-shirt" ` +
+            `rather than "black".`,
+        );
+      }
+      slugSources.set(slug, garmentPath);
+
       const previous = existing.get(slug);
       const title = previous?.title ?? titleFrom(garmentFolder);
 
@@ -194,8 +212,12 @@ async function uploadOne(
     allowOverwrite: true,
   });
 
-  const saved = Math.round((1 - normalised.data.byteLength / original.byteLength) * 100);
-  console.log(`  ${path} -> ${normalised.info.width}x${normalised.info.height} (-${saved}%)`);
+  const change = Math.round((1 - normalised.data.byteLength / original.byteLength) * 100);
+  // A negative saving is real and worth seeing: re-encoding an already-compressed
+  // web-sized JPEG can produce a larger file, which says the source was never a
+  // camera original.
+  const size = `${normalised.info.width}x${normalised.info.height}`;
+  console.log(`  ${path} -> ${size} (${change >= 0 ? "-" : "+"}${Math.abs(change)}%)`);
 
   return {
     url: blob.url,

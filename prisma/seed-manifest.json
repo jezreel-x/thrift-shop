@@ -1,0 +1,1034 @@
+[
+  {
+    "slug": "black-plaid-flannel",
+    "category": "FLANNELS",
+    "title": "Black plaid flannel",
+    "description": null,
+    "brand": null,
+    "priceCents": 60000,
+    "size": "S",
+    "condition": "NEW_WITH_TAGS",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/c077d5ab423781e63ff5eafa397f3b09211cbb5caa3487097234a231a46c0aa5.webp",
+        "pathname": "products/c077d5ab423781e63ff5eafa397f3b09211cbb5caa3487097234a231a46c0aa5.webp",
+        "checksum": "c077d5ab423781e63ff5eafa397f3b09211cbb5caa3487097234a231a46c0aa5",
+        "width": 736,
+        "height": 980,
+        "alt": "Black plaid flannel"
+      }
+    ]
+  },
+  {
+    "slug": "blue-plaid-flannel",
+    "category": "FLANNELS",
+    "title": "Blue plaid flannel",
+    "description": null,
+    "brand": null,
+    "priceCents": 85000,
+    "size": "XL",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/22c6c70e5036e0ff1d48e0299522e80bd15a01d8c40ee92a1cf3be93464ea0ff.webp",
+        "pathname": "products/22c6c70e5036e0ff1d48e0299522e80bd15a01d8c40ee92a1cf3be93464ea0ff.webp",
+        "checksum": "22c6c70e5036e0ff1d48e0299522e80bd15a01d8c40ee92a1cf3be93464ea0ff",
+        "width": 736,
+        "height": 1115,
+        "alt": "Blue plaid flannel"
+      }
+    ]
+  },
+  {
+    "slug": "brown-plaid-flannel",
+    "category": "FLANNELS",
+    "title": "Brown plaid flannel",
+    "description": null,
+    "brand": null,
+    "priceCents": 110000,
+    "size": "L",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/5b79ed1359d9f8725f9e1b322ea0a8dca35812c6408f435273bb00bc2257b594.webp",
+        "pathname": "products/5b79ed1359d9f8725f9e1b322ea0a8dca35812c6408f435273bb00bc2257b594.webp",
+        "checksum": "5b79ed1359d9f8725f9e1b322ea0a8dca35812c6408f435273bb00bc2257b594",
+        "width": 450,
+        "height": 675,
+        "alt": "Brown plaid flannel"
+      }
+    ]
+  },
+  {
+    "slug": "green-plaid-flannel",
+    "category": "FLANNELS",
+    "title": "Green plaid flannel",
+    "description": null,
+    "brand": null,
+    "priceCents": 70000,
+    "size": "M",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/fe834ec60245ceff5975266ba596a7fb2200ffe8b5a1d8e0fff586caba566dde.webp",
+        "pathname": "products/fe834ec60245ceff5975266ba596a7fb2200ffe8b5a1d8e0fff586caba566dde.webp",
+        "checksum": "fe834ec60245ceff5975266ba596a7fb2200ffe8b5a1d8e0fff586caba566dde",
+        "width": 736,
+        "height": 980,
+        "alt": "Green plaid flannel"
+      }
+    ]
+  },
+  {
+    "slug": "red-plaid-flannel",
+    "category": "FLANNELS",
+    "title": "Red plaid flannel",
+    "description": null,
+    "brand": null,
+    "priceCents": 95000,
+    "size": "S",
+    "condition": "FAIR",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/e4ca01d8f3c0bd3d8283bc3777c47f14d3c43b95361c72b03de9d047a9f663cb.webp",
+        "pathname": "products/e4ca01d8f3c0bd3d8283bc3777c47f14d3c43b95361c72b03de9d047a9f663cb.webp",
+        "checksum": "e4ca01d8f3c0bd3d8283bc3777c47f14d3c43b95361c72b03de9d047a9f663cb",
+        "width": 736,
+        "height": 820,
+        "alt": "Red plaid flannel"
+      }
+    ]
+  },
+  {
+    "slug": "buttoned-hoodie",
+    "category": "HOODIES",
+    "title": "Buttoned hoodie",
+    "description": null,
+    "brand": null,
+    "priceCents": 230000,
+    "size": "XL",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/7785f5c80b38bb11d78a53195ff798643eba5b05238559ef9e310f08754a8c8f.webp",
+        "pathname": "products/7785f5c80b38bb11d78a53195ff798643eba5b05238559ef9e310f08754a8c8f.webp",
+        "checksum": "7785f5c80b38bb11d78a53195ff798643eba5b05238559ef9e310f08754a8c8f",
+        "width": 736,
+        "height": 980,
+        "alt": "Buttoned hoodie"
+      }
+    ]
+  },
+  {
+    "slug": "plain-hoodie",
+    "category": "HOODIES",
+    "title": "Plain hoodie",
+    "description": null,
+    "brand": null,
+    "priceCents": 150000,
+    "size": "L",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/091eb265c101c03d0766a0b73378a5b5156f891d9897656fa9bb91356d8db52c.webp",
+        "pathname": "products/091eb265c101c03d0766a0b73378a5b5156f891d9897656fa9bb91356d8db52c.webp",
+        "checksum": "091eb265c101c03d0766a0b73378a5b5156f891d9897656fa9bb91356d8db52c",
+        "width": 735,
+        "height": 979,
+        "alt": "Plain hoodie"
+      }
+    ]
+  },
+  {
+    "slug": "scuffer-hoodie",
+    "category": "HOODIES",
+    "title": "Scuffer hoodie",
+    "description": null,
+    "brand": null,
+    "priceCents": 195000,
+    "size": "M",
+    "condition": "NEW_WITH_TAGS",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/f47e64b0c7580cbf8cc94d1e80ae0433d0fe7aa5fe0928861143a9f0c8f332cb.webp",
+        "pathname": "products/f47e64b0c7580cbf8cc94d1e80ae0433d0fe7aa5fe0928861143a9f0c8f332cb.webp",
+        "checksum": "f47e64b0c7580cbf8cc94d1e80ae0433d0fe7aa5fe0928861143a9f0c8f332cb",
+        "width": 550,
+        "height": 733,
+        "alt": "Scuffer hoodie"
+      }
+    ]
+  },
+  {
+    "slug": "zip-checked-hoodie",
+    "category": "HOODIES",
+    "title": "Zip checked hoodie",
+    "description": null,
+    "brand": null,
+    "priceCents": 245000,
+    "size": "S",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/bc05f288c97184dc33e39771022a4e71cf5eb3a61ae99f36aa8816cea2678086.webp",
+        "pathname": "products/bc05f288c97184dc33e39771022a4e71cf5eb3a61ae99f36aa8816cea2678086.webp",
+        "checksum": "bc05f288c97184dc33e39771022a4e71cf5eb3a61ae99f36aa8816cea2678086",
+        "width": 736,
+        "height": 874,
+        "alt": "Zip checked hoodie"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/50c864c8efd1e3764ec699f5f2278d74cc0c1f1d95014ed126a5940fe4aaae3d.webp",
+        "pathname": "products/50c864c8efd1e3764ec699f5f2278d74cc0c1f1d95014ed126a5940fe4aaae3d.webp",
+        "checksum": "50c864c8efd1e3764ec699f5f2278d74cc0c1f1d95014ed126a5940fe4aaae3d",
+        "width": 736,
+        "height": 874,
+        "alt": "Zip checked hoodie, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/24216887f931cb46b93930313a800c29f86ae2a2ffa4a5a11e5a4a092e6e72e4.webp",
+        "pathname": "products/24216887f931cb46b93930313a800c29f86ae2a2ffa4a5a11e5a4a092e6e72e4.webp",
+        "checksum": "24216887f931cb46b93930313a800c29f86ae2a2ffa4a5a11e5a4a092e6e72e4",
+        "width": 460,
+        "height": 550,
+        "alt": "Zip checked hoodie, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "zip-up-hoodie",
+    "category": "HOODIES",
+    "title": "Zip up hoodie",
+    "description": null,
+    "brand": null,
+    "priceCents": 165000,
+    "size": "XL",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/473dbb223255789d00c91037f8fcab18f8454f2e57ddc0ba8842b8b150829336.webp",
+        "pathname": "products/473dbb223255789d00c91037f8fcab18f8454f2e57ddc0ba8842b8b150829336.webp",
+        "checksum": "473dbb223255789d00c91037f8fcab18f8454f2e57ddc0ba8842b8b150829336",
+        "width": 736,
+        "height": 1104,
+        "alt": "Zip up hoodie"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3823d902a4f45fc70d2ce408a8b07125b943f3f6014bcb601ed3a918f32d91e1.webp",
+        "pathname": "products/3823d902a4f45fc70d2ce408a8b07125b943f3f6014bcb601ed3a918f32d91e1.webp",
+        "checksum": "3823d902a4f45fc70d2ce408a8b07125b943f3f6014bcb601ed3a918f32d91e1",
+        "width": 679,
+        "height": 851,
+        "alt": "Zip up hoodie, view 2"
+      }
+    ]
+  },
+  {
+    "slug": "black-side-pocket-pant",
+    "category": "SIDE_POCKET_PANTS",
+    "title": "Black side pocket pant",
+    "description": null,
+    "brand": null,
+    "priceCents": 180000,
+    "size": "L",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/c1ebb8a7bed2dc586025c916130b04b76280ede53255ad3bbd8c02eefd4f2b6f.webp",
+        "pathname": "products/c1ebb8a7bed2dc586025c916130b04b76280ede53255ad3bbd8c02eefd4f2b6f.webp",
+        "checksum": "c1ebb8a7bed2dc586025c916130b04b76280ede53255ad3bbd8c02eefd4f2b6f",
+        "width": 440,
+        "height": 852,
+        "alt": "Black side pocket pant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/4d88b6aaf53ace823dc6a57dc1a3b90b7fa86e6db9d827c53ae45090f0d84136.webp",
+        "pathname": "products/4d88b6aaf53ace823dc6a57dc1a3b90b7fa86e6db9d827c53ae45090f0d84136.webp",
+        "checksum": "4d88b6aaf53ace823dc6a57dc1a3b90b7fa86e6db9d827c53ae45090f0d84136",
+        "width": 736,
+        "height": 980,
+        "alt": "Black side pocket pant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/466a0eadebb2cb25722181ceab1c403ec308552d4574220276bfedc60671a4d0.webp",
+        "pathname": "products/466a0eadebb2cb25722181ceab1c403ec308552d4574220276bfedc60671a4d0.webp",
+        "checksum": "466a0eadebb2cb25722181ceab1c403ec308552d4574220276bfedc60671a4d0",
+        "width": 558,
+        "height": 744,
+        "alt": "Black side pocket pant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "brown-side-pocket-pant",
+    "category": "SIDE_POCKET_PANTS",
+    "title": "Brown side pocket pant",
+    "description": null,
+    "brand": null,
+    "priceCents": 115000,
+    "size": "M",
+    "condition": "FAIR",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/9012ebc530da96ce15b4edbf20c1424daf74244f2ae3a4eacd7c13f3a565f478.webp",
+        "pathname": "products/9012ebc530da96ce15b4edbf20c1424daf74244f2ae3a4eacd7c13f3a565f478.webp",
+        "checksum": "9012ebc530da96ce15b4edbf20c1424daf74244f2ae3a4eacd7c13f3a565f478",
+        "width": 681,
+        "height": 1600,
+        "alt": "Brown side pocket pant"
+      }
+    ]
+  },
+  {
+    "slug": "grey-side-pocket-pant",
+    "category": "SIDE_POCKET_PANTS",
+    "title": "Grey side pocket pant",
+    "description": null,
+    "brand": null,
+    "priceCents": 155000,
+    "size": "S",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/d2bc738ca170050853d1d393ed3b9d4e23a6fbd627c7c240f62d718c6fddabc8.webp",
+        "pathname": "products/d2bc738ca170050853d1d393ed3b9d4e23a6fbd627c7c240f62d718c6fddabc8.webp",
+        "checksum": "d2bc738ca170050853d1d393ed3b9d4e23a6fbd627c7c240f62d718c6fddabc8",
+        "width": 736,
+        "height": 981,
+        "alt": "Grey side pocket pant"
+      }
+    ]
+  },
+  {
+    "slug": "jungle-green-side-pocket-pant",
+    "category": "SIDE_POCKET_PANTS",
+    "title": "Jungle green side pocket pant",
+    "description": null,
+    "brand": null,
+    "priceCents": 190000,
+    "size": "XL",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/b9b90e83cc1b3e9b163ee352a9c6d76aa8792cbd6f32cb6fb6ec63cfb8ae0e1c.webp",
+        "pathname": "products/b9b90e83cc1b3e9b163ee352a9c6d76aa8792cbd6f32cb6fb6ec63cfb8ae0e1c.webp",
+        "checksum": "b9b90e83cc1b3e9b163ee352a9c6d76aa8792cbd6f32cb6fb6ec63cfb8ae0e1c",
+        "width": 440,
+        "height": 616,
+        "alt": "Jungle green side pocket pant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/5a6ad126ae415d8ef98f2585713916c6b9f4456a32359e30670498b9b6250960.webp",
+        "pathname": "products/5a6ad126ae415d8ef98f2585713916c6b9f4456a32359e30670498b9b6250960.webp",
+        "checksum": "5a6ad126ae415d8ef98f2585713916c6b9f4456a32359e30670498b9b6250960",
+        "width": 736,
+        "height": 1308,
+        "alt": "Jungle green side pocket pant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/9e3783610e987ef6a6a50b11908e980d5d752ff5c8060db2a41ce94366bbd07d.webp",
+        "pathname": "products/9e3783610e987ef6a6a50b11908e980d5d752ff5c8060db2a41ce94366bbd07d.webp",
+        "checksum": "9e3783610e987ef6a6a50b11908e980d5d752ff5c8060db2a41ce94366bbd07d",
+        "width": 679,
+        "height": 1344,
+        "alt": "Jungle green side pocket pant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "black-sweatpant",
+    "category": "SWEATPANTS",
+    "title": "Black sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 95000,
+    "size": "L",
+    "condition": "NEW_WITH_TAGS",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/bfa2936eb893dc4bab69ded2c04a40a13fbcdbf44bc213fc663b124f4b483f88.webp",
+        "pathname": "products/bfa2936eb893dc4bab69ded2c04a40a13fbcdbf44bc213fc663b124f4b483f88.webp",
+        "checksum": "bfa2936eb893dc4bab69ded2c04a40a13fbcdbf44bc213fc663b124f4b483f88",
+        "width": 736,
+        "height": 736,
+        "alt": "Black sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/6ecfd68207d4e67dfaf3307330f047079a3812cf3e487c9aadc1cdcaae986a33.webp",
+        "pathname": "products/6ecfd68207d4e67dfaf3307330f047079a3812cf3e487c9aadc1cdcaae986a33.webp",
+        "checksum": "6ecfd68207d4e67dfaf3307330f047079a3812cf3e487c9aadc1cdcaae986a33",
+        "width": 736,
+        "height": 980,
+        "alt": "Black sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/749c03e7a057aebe3396d41757a51681d70ccaa1973d29b5e380f0c09be8047d.webp",
+        "pathname": "products/749c03e7a057aebe3396d41757a51681d70ccaa1973d29b5e380f0c09be8047d.webp",
+        "checksum": "749c03e7a057aebe3396d41757a51681d70ccaa1973d29b5e380f0c09be8047d",
+        "width": 720,
+        "height": 959,
+        "alt": "Black sweatpant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "brown-sweatpant",
+    "category": "SWEATPANTS",
+    "title": "Brown sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 125000,
+    "size": "M",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/654989e361eea9a6eae9048f7bc66648f2230d0a10c46ce8706261d08cd947f6.webp",
+        "pathname": "products/654989e361eea9a6eae9048f7bc66648f2230d0a10c46ce8706261d08cd947f6.webp",
+        "checksum": "654989e361eea9a6eae9048f7bc66648f2230d0a10c46ce8706261d08cd947f6",
+        "width": 736,
+        "height": 920,
+        "alt": "Brown sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/cda3b9b9dd179f772a671a7b36ec0ac95cebcc470ce6b9430eccc9d193d2b29e.webp",
+        "pathname": "products/cda3b9b9dd179f772a671a7b36ec0ac95cebcc470ce6b9430eccc9d193d2b29e.webp",
+        "checksum": "cda3b9b9dd179f772a671a7b36ec0ac95cebcc470ce6b9430eccc9d193d2b29e",
+        "width": 500,
+        "height": 667,
+        "alt": "Brown sweatpant, view 2"
+      }
+    ]
+  },
+  {
+    "slug": "green-sweatpant",
+    "category": "SWEATPANTS",
+    "title": "Green sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 155000,
+    "size": "S",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/0c8a204343233ea00c965b6558a2741464d2168c2e564f990ce575545d18b0d2.webp",
+        "pathname": "products/0c8a204343233ea00c965b6558a2741464d2168c2e564f990ce575545d18b0d2.webp",
+        "checksum": "0c8a204343233ea00c965b6558a2741464d2168c2e564f990ce575545d18b0d2",
+        "width": 735,
+        "height": 1330,
+        "alt": "Green sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/83130910bd314a73eba04896ee13a3a70dfa10399161fa983a676da0dee10c52.webp",
+        "pathname": "products/83130910bd314a73eba04896ee13a3a70dfa10399161fa983a676da0dee10c52.webp",
+        "checksum": "83130910bd314a73eba04896ee13a3a70dfa10399161fa983a676da0dee10c52",
+        "width": 736,
+        "height": 981,
+        "alt": "Green sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/d9d9c7884c024a1169d6273c0f68a43d3ba31ec6d6880f3fb650546ccfbf692c.webp",
+        "pathname": "products/d9d9c7884c024a1169d6273c0f68a43d3ba31ec6d6880f3fb650546ccfbf692c.webp",
+        "checksum": "d9d9c7884c024a1169d6273c0f68a43d3ba31ec6d6880f3fb650546ccfbf692c",
+        "width": 736,
+        "height": 1104,
+        "alt": "Green sweatpant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "grey-sweatpant",
+    "category": "SWEATPANTS",
+    "title": "Grey sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 105000,
+    "size": "XL",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/ed8631e15ce51689a8c716a2ade9769f6c6f7bf1a9d0fd1a71b4c326f69461cc.webp",
+        "pathname": "products/ed8631e15ce51689a8c716a2ade9769f6c6f7bf1a9d0fd1a71b4c326f69461cc.webp",
+        "checksum": "ed8631e15ce51689a8c716a2ade9769f6c6f7bf1a9d0fd1a71b4c326f69461cc",
+        "width": 426,
+        "height": 900,
+        "alt": "Grey sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/96a6e70e688c70e13895a9c5eada71800ff4cabcbafc4567a8d4eb74693501e3.webp",
+        "pathname": "products/96a6e70e688c70e13895a9c5eada71800ff4cabcbafc4567a8d4eb74693501e3.webp",
+        "checksum": "96a6e70e688c70e13895a9c5eada71800ff4cabcbafc4567a8d4eb74693501e3",
+        "width": 736,
+        "height": 1308,
+        "alt": "Grey sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/5bf43d7db9ef4bd3a03bf2fe4e459f1acff602dd4d05b29a3a3ccc1ee08e857f.webp",
+        "pathname": "products/5bf43d7db9ef4bd3a03bf2fe4e459f1acff602dd4d05b29a3a3ccc1ee08e857f.webp",
+        "checksum": "5bf43d7db9ef4bd3a03bf2fe4e459f1acff602dd4d05b29a3a3ccc1ee08e857f",
+        "width": 535,
+        "height": 879,
+        "alt": "Grey sweatpant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "black-crewneck-sweatshirt",
+    "category": "SWEATSHIRTS",
+    "title": "Black crewneck sweatshirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 150000,
+    "size": "L",
+    "condition": "FAIR",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/ddffd70e85845fa63c4e48a30958acdd99f0e19eb50853fc981e450e2f504124.webp",
+        "pathname": "products/ddffd70e85845fa63c4e48a30958acdd99f0e19eb50853fc981e450e2f504124.webp",
+        "checksum": "ddffd70e85845fa63c4e48a30958acdd99f0e19eb50853fc981e450e2f504124",
+        "width": 679,
+        "height": 704,
+        "alt": "Black crewneck sweatshirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/76de592b7b2a0653d399b05afc86ebf284129f37abb63370e3477ac2d7dd2ab1.webp",
+        "pathname": "products/76de592b7b2a0653d399b05afc86ebf284129f37abb63370e3477ac2d7dd2ab1.webp",
+        "checksum": "76de592b7b2a0653d399b05afc86ebf284129f37abb63370e3477ac2d7dd2ab1",
+        "width": 736,
+        "height": 957,
+        "alt": "Black crewneck sweatshirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/e3f0cdbc08273e19539aa2ebf986fe3a9aa817599a8109b59df7fb1cf43ade61.webp",
+        "pathname": "products/e3f0cdbc08273e19539aa2ebf986fe3a9aa817599a8109b59df7fb1cf43ade61.webp",
+        "checksum": "e3f0cdbc08273e19539aa2ebf986fe3a9aa817599a8109b59df7fb1cf43ade61",
+        "width": 694,
+        "height": 706,
+        "alt": "Black crewneck sweatshirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "brown-crewneck-sweatshirt",
+    "category": "SWEATSHIRTS",
+    "title": "Brown crewneck sweatshirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 95000,
+    "size": "M",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/ebb8e7d3a6c312e010d34a3bd09c14ff664dca072e6d118c080bea65ea2a1ca1.webp",
+        "pathname": "products/ebb8e7d3a6c312e010d34a3bd09c14ff664dca072e6d118c080bea65ea2a1ca1.webp",
+        "checksum": "ebb8e7d3a6c312e010d34a3bd09c14ff664dca072e6d118c080bea65ea2a1ca1",
+        "width": 720,
+        "height": 960,
+        "alt": "Brown crewneck sweatshirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/2f1677ed4dedc4b635b139fde75314a7fe62523b68aed22ae9e1d26e0ba5c8a5.webp",
+        "pathname": "products/2f1677ed4dedc4b635b139fde75314a7fe62523b68aed22ae9e1d26e0ba5c8a5.webp",
+        "checksum": "2f1677ed4dedc4b635b139fde75314a7fe62523b68aed22ae9e1d26e0ba5c8a5",
+        "width": 736,
+        "height": 954,
+        "alt": "Brown crewneck sweatshirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/8ea3799b643592ba33e1a579e0c2795009285423a468fdbf23c37340e71e5eda.webp",
+        "pathname": "products/8ea3799b643592ba33e1a579e0c2795009285423a468fdbf23c37340e71e5eda.webp",
+        "checksum": "8ea3799b643592ba33e1a579e0c2795009285423a468fdbf23c37340e71e5eda",
+        "width": 736,
+        "height": 736,
+        "alt": "Brown crewneck sweatshirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "green-crewneck-sweatshirt",
+    "category": "SWEATSHIRTS",
+    "title": "Green crewneck sweatshirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 125000,
+    "size": "S",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/fc60e467f0145fd483db246b0f9f2ae4d4273eb875a00a2b7409e36742296253.webp",
+        "pathname": "products/fc60e467f0145fd483db246b0f9f2ae4d4273eb875a00a2b7409e36742296253.webp",
+        "checksum": "fc60e467f0145fd483db246b0f9f2ae4d4273eb875a00a2b7409e36742296253",
+        "width": 736,
+        "height": 954,
+        "alt": "Green crewneck sweatshirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/8a0e79b6782d5f31cc24bb408f9a4928d1859659a0f72ff6cb3a7adecc9063a2.webp",
+        "pathname": "products/8a0e79b6782d5f31cc24bb408f9a4928d1859659a0f72ff6cb3a7adecc9063a2.webp",
+        "checksum": "8a0e79b6782d5f31cc24bb408f9a4928d1859659a0f72ff6cb3a7adecc9063a2",
+        "width": 736,
+        "height": 1003,
+        "alt": "Green crewneck sweatshirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3ddb433b982d230d18e33fe4876c9393d812667e9e7d3a636a039cbbcd66b40a.webp",
+        "pathname": "products/3ddb433b982d230d18e33fe4876c9393d812667e9e7d3a636a039cbbcd66b40a.webp",
+        "checksum": "3ddb433b982d230d18e33fe4876c9393d812667e9e7d3a636a039cbbcd66b40a",
+        "width": 736,
+        "height": 1104,
+        "alt": "Green crewneck sweatshirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "beige-t-shirt",
+    "category": "T_SHIRTS",
+    "title": "Beige t shirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 70000,
+    "size": "XL",
+    "condition": "NEW_WITH_TAGS",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3aa13162f69952d5e8a8bc5ee1e194f9f80d2609b5a4c6b2705647e90e628771.webp",
+        "pathname": "products/3aa13162f69952d5e8a8bc5ee1e194f9f80d2609b5a4c6b2705647e90e628771.webp",
+        "checksum": "3aa13162f69952d5e8a8bc5ee1e194f9f80d2609b5a4c6b2705647e90e628771",
+        "width": 736,
+        "height": 981,
+        "alt": "Beige t shirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3c45c54d4d62763811cb42cfb7f7048afb2c8c10b18f11f4583552d9efdf51fd.webp",
+        "pathname": "products/3c45c54d4d62763811cb42cfb7f7048afb2c8c10b18f11f4583552d9efdf51fd.webp",
+        "checksum": "3c45c54d4d62763811cb42cfb7f7048afb2c8c10b18f11f4583552d9efdf51fd",
+        "width": 736,
+        "height": 1069,
+        "alt": "Beige t shirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/056535b2e0e35ae8c6ec713a743fc1700f3c6d241bf30b7db65cc67d2aa31f89.webp",
+        "pathname": "products/056535b2e0e35ae8c6ec713a743fc1700f3c6d241bf30b7db65cc67d2aa31f89.webp",
+        "checksum": "056535b2e0e35ae8c6ec713a743fc1700f3c6d241bf30b7db65cc67d2aa31f89",
+        "width": 473,
+        "height": 593,
+        "alt": "Beige t shirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "black-t-shirt",
+    "category": "T_SHIRTS",
+    "title": "Black t shirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 40000,
+    "size": "L",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3637d3ccbb137e9d3a250a78d1f8dfa4ff02f699b0884c35b34cfcba045b7f8b.webp",
+        "pathname": "products/3637d3ccbb137e9d3a250a78d1f8dfa4ff02f699b0884c35b34cfcba045b7f8b.webp",
+        "checksum": "3637d3ccbb137e9d3a250a78d1f8dfa4ff02f699b0884c35b34cfcba045b7f8b",
+        "width": 736,
+        "height": 1104,
+        "alt": "Black t shirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/9b22cef0e1873192e98778031f4726472c7a2878c46dcef857d481fc62a68ee3.webp",
+        "pathname": "products/9b22cef0e1873192e98778031f4726472c7a2878c46dcef857d481fc62a68ee3.webp",
+        "checksum": "9b22cef0e1873192e98778031f4726472c7a2878c46dcef857d481fc62a68ee3",
+        "width": 736,
+        "height": 980,
+        "alt": "Black t shirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3c452f0bd854faf6e510649f14a2126f23301f1ff97976da6ba3552bbed44ac5.webp",
+        "pathname": "products/3c452f0bd854faf6e510649f14a2126f23301f1ff97976da6ba3552bbed44ac5.webp",
+        "checksum": "3c452f0bd854faf6e510649f14a2126f23301f1ff97976da6ba3552bbed44ac5",
+        "width": 450,
+        "height": 500,
+        "alt": "Black t shirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "blue-t-shirt",
+    "category": "T_SHIRTS",
+    "title": "Blue t shirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 60000,
+    "size": "M",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/97f685704e9cfa16d76f3d6c88c694fa11e4812df583eb0322ae2f494dc296f6.webp",
+        "pathname": "products/97f685704e9cfa16d76f3d6c88c694fa11e4812df583eb0322ae2f494dc296f6.webp",
+        "checksum": "97f685704e9cfa16d76f3d6c88c694fa11e4812df583eb0322ae2f494dc296f6",
+        "width": 736,
+        "height": 736,
+        "alt": "Blue t shirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/8ec99dc15fc469fb454641af8d6b5c714692a0353b69366372769d5c04287100.webp",
+        "pathname": "products/8ec99dc15fc469fb454641af8d6b5c714692a0353b69366372769d5c04287100.webp",
+        "checksum": "8ec99dc15fc469fb454641af8d6b5c714692a0353b69366372769d5c04287100",
+        "width": 736,
+        "height": 736,
+        "alt": "Blue t shirt, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/7b722e6b1ff4d41efcdb7834ab597669a3c874fb3c397196222245e1b0fe1263.webp",
+        "pathname": "products/7b722e6b1ff4d41efcdb7834ab597669a3c874fb3c397196222245e1b0fe1263.webp",
+        "checksum": "7b722e6b1ff4d41efcdb7834ab597669a3c874fb3c397196222245e1b0fe1263",
+        "width": 736,
+        "height": 920,
+        "alt": "Blue t shirt, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "green-t-shirt",
+    "category": "T_SHIRTS",
+    "title": "Green t shirt",
+    "description": null,
+    "brand": null,
+    "priceCents": 75000,
+    "size": "S",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/a022adf4913d736214964efccb5d2a5607a3bed83d69f05b8ca38e905e1f3426.webp",
+        "pathname": "products/a022adf4913d736214964efccb5d2a5607a3bed83d69f05b8ca38e905e1f3426.webp",
+        "checksum": "a022adf4913d736214964efccb5d2a5607a3bed83d69f05b8ca38e905e1f3426",
+        "width": 736,
+        "height": 981,
+        "alt": "Green t shirt"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/149ade15184979ce7e7ba37e94ebd551e2c355f5919d66aaab44bb29558b37e0.webp",
+        "pathname": "products/149ade15184979ce7e7ba37e94ebd551e2c355f5919d66aaab44bb29558b37e0.webp",
+        "checksum": "149ade15184979ce7e7ba37e94ebd551e2c355f5919d66aaab44bb29558b37e0",
+        "width": 736,
+        "height": 736,
+        "alt": "Green t shirt, view 2"
+      }
+    ]
+  },
+  {
+    "slug": "calvin-klein-underwear",
+    "category": "UNDERWEAR",
+    "title": "Calvin klein underwear",
+    "description": null,
+    "brand": "Calvin Klein",
+    "priceCents": 45000,
+    "size": "XL",
+    "condition": "FAIR",
+    "gender": "MENS",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/d16e1f317a0f39a4eda1f2813c58517f87249cbe883335e118c52c91fb800e62.webp",
+        "pathname": "products/d16e1f317a0f39a4eda1f2813c58517f87249cbe883335e118c52c91fb800e62.webp",
+        "checksum": "d16e1f317a0f39a4eda1f2813c58517f87249cbe883335e118c52c91fb800e62",
+        "width": 736,
+        "height": 1308,
+        "alt": "Calvin klein underwear"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/c67dd587e0c89f21d316a06f7c148f80cac0279c5186a77fd5d9ed3e27cbf559.webp",
+        "pathname": "products/c67dd587e0c89f21d316a06f7c148f80cac0279c5186a77fd5d9ed3e27cbf559.webp",
+        "checksum": "c67dd587e0c89f21d316a06f7c148f80cac0279c5186a77fd5d9ed3e27cbf559",
+        "width": 736,
+        "height": 918,
+        "alt": "Calvin klein underwear, view 2"
+      }
+    ]
+  },
+  {
+    "slug": "nike-underwear",
+    "category": "UNDERWEAR",
+    "title": "Nike underwear",
+    "description": null,
+    "brand": "Nike",
+    "priceCents": 60000,
+    "size": "L",
+    "condition": "GOOD",
+    "gender": "MENS",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/ac8ac9833d714f0fe55df07c50768151d53f2957a8b458a410d974febbd031ff.webp",
+        "pathname": "products/ac8ac9833d714f0fe55df07c50768151d53f2957a8b458a410d974febbd031ff.webp",
+        "checksum": "ac8ac9833d714f0fe55df07c50768151d53f2957a8b458a410d974febbd031ff",
+        "width": 736,
+        "height": 997,
+        "alt": "Nike underwear"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/885a9581454eb4565989f21d5c6cb834504b5ef9052f7ffdf23d259419d30d2e.webp",
+        "pathname": "products/885a9581454eb4565989f21d5c6cb834504b5ef9052f7ffdf23d259419d30d2e.webp",
+        "checksum": "885a9581454eb4565989f21d5c6cb834504b5ef9052f7ffdf23d259419d30d2e",
+        "width": 736,
+        "height": 996,
+        "alt": "Nike underwear, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/aa092bf3765220178a9e22e80bdbdf6f96a8bef22b4c6fa274ea29282b856c42.webp",
+        "pathname": "products/aa092bf3765220178a9e22e80bdbdf6f96a8bef22b4c6fa274ea29282b856c42.webp",
+        "checksum": "aa092bf3765220178a9e22e80bdbdf6f96a8bef22b4c6fa274ea29282b856c42",
+        "width": 736,
+        "height": 996,
+        "alt": "Nike underwear, view 3"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/b0c2b02e3a04ee7c6c36413fe52d4d641a94a951deea45f0b0c81d01347f78c7.webp",
+        "pathname": "products/b0c2b02e3a04ee7c6c36413fe52d4d641a94a951deea45f0b0c81d01347f78c7.webp",
+        "checksum": "b0c2b02e3a04ee7c6c36413fe52d4d641a94a951deea45f0b0c81d01347f78c7",
+        "width": 736,
+        "height": 920,
+        "alt": "Nike underwear, view 4"
+      }
+    ]
+  },
+  {
+    "slug": "womens-underwear",
+    "category": "UNDERWEAR",
+    "title": "Womens underwear",
+    "description": null,
+    "brand": null,
+    "priceCents": 80000,
+    "size": "M",
+    "condition": "EXCELLENT",
+    "gender": "WOMENS",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/c64497969e0b146d677c0e77c5eb29d75e4f2dfd197686ff61b35c3d88fd2c7f.webp",
+        "pathname": "products/c64497969e0b146d677c0e77c5eb29d75e4f2dfd197686ff61b35c3d88fd2c7f.webp",
+        "checksum": "c64497969e0b146d677c0e77c5eb29d75e4f2dfd197686ff61b35c3d88fd2c7f",
+        "width": 510,
+        "height": 879,
+        "alt": "Womens underwear"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/842433a8c335484ee470699d54ce85692aeb0ed873bbf9780f06b66c2799bdbb.webp",
+        "pathname": "products/842433a8c335484ee470699d54ce85692aeb0ed873bbf9780f06b66c2799bdbb.webp",
+        "checksum": "842433a8c335484ee470699d54ce85692aeb0ed873bbf9780f06b66c2799bdbb",
+        "width": 735,
+        "height": 919,
+        "alt": "Womens underwear, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/5d22f78017eaf28ece46ea8109fd8b68f4d6767bbce60bbe96100ecbded75380.webp",
+        "pathname": "products/5d22f78017eaf28ece46ea8109fd8b68f4d6767bbce60bbe96100ecbded75380.webp",
+        "checksum": "5d22f78017eaf28ece46ea8109fd8b68f4d6767bbce60bbe96100ecbded75380",
+        "width": 679,
+        "height": 1038,
+        "alt": "Womens underwear, view 3"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/dca1b289ad3daac93937630d11502cf11fc96deacd823f33c150642d0e90ad01.webp",
+        "pathname": "products/dca1b289ad3daac93937630d11502cf11fc96deacd823f33c150642d0e90ad01.webp",
+        "checksum": "dca1b289ad3daac93937630d11502cf11fc96deacd823f33c150642d0e90ad01",
+        "width": 735,
+        "height": 919,
+        "alt": "Womens underwear, view 4"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/58b0763601001666381872feb06995dfd919ebaf81f0959a1600ac526b7fe9fd.webp",
+        "pathname": "products/58b0763601001666381872feb06995dfd919ebaf81f0959a1600ac526b7fe9fd.webp",
+        "checksum": "58b0763601001666381872feb06995dfd919ebaf81f0959a1600ac526b7fe9fd",
+        "width": 679,
+        "height": 873,
+        "alt": "Womens underwear, view 5"
+      }
+    ]
+  },
+  {
+    "slug": "black-wide-leg-sweatpant",
+    "category": "WIDE_LEG_SWEATPANTS",
+    "title": "Black wide leg sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 130000,
+    "size": "S",
+    "condition": "NEW_WITH_TAGS",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/afc2b9c12cbf2c29ca84d636904dea92bf3dea3127bb90563f53958bbf70901f.webp",
+        "pathname": "products/afc2b9c12cbf2c29ca84d636904dea92bf3dea3127bb90563f53958bbf70901f.webp",
+        "checksum": "afc2b9c12cbf2c29ca84d636904dea92bf3dea3127bb90563f53958bbf70901f",
+        "width": 563,
+        "height": 722,
+        "alt": "Black wide leg sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/8a05e1b43d1a6e4b6b91d7dfc0bdfb36dedb5b322dde2414a6e734c29613fa87.webp",
+        "pathname": "products/8a05e1b43d1a6e4b6b91d7dfc0bdfb36dedb5b322dde2414a6e734c29613fa87.webp",
+        "checksum": "8a05e1b43d1a6e4b6b91d7dfc0bdfb36dedb5b322dde2414a6e734c29613fa87",
+        "width": 556,
+        "height": 741,
+        "alt": "Black wide leg sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/474ea85a958d291d198a22b3c34169d646a28ca8c6cb0709ca8ae11e27a4f0af.webp",
+        "pathname": "products/474ea85a958d291d198a22b3c34169d646a28ca8c6cb0709ca8ae11e27a4f0af.webp",
+        "checksum": "474ea85a958d291d198a22b3c34169d646a28ca8c6cb0709ca8ae11e27a4f0af",
+        "width": 736,
+        "height": 1174,
+        "alt": "Black wide leg sweatpant, view 3"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/21adbdada3a151b24c312bba6a3e98f57b9795cdae0dcbe36e5e2c396869550f.webp",
+        "pathname": "products/21adbdada3a151b24c312bba6a3e98f57b9795cdae0dcbe36e5e2c396869550f.webp",
+        "checksum": "21adbdada3a151b24c312bba6a3e98f57b9795cdae0dcbe36e5e2c396869550f",
+        "width": 736,
+        "height": 1104,
+        "alt": "Black wide leg sweatpant, view 4"
+      }
+    ]
+  },
+  {
+    "slug": "brown-wide-leg-sweatpant",
+    "category": "WIDE_LEG_SWEATPANTS",
+    "title": "Brown wide leg sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 165000,
+    "size": "XL",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/5df0d2d14e070fdffe16f997e06dc02e821ad34c9c08ac57b7d8222ecaa4dde4.webp",
+        "pathname": "products/5df0d2d14e070fdffe16f997e06dc02e821ad34c9c08ac57b7d8222ecaa4dde4.webp",
+        "checksum": "5df0d2d14e070fdffe16f997e06dc02e821ad34c9c08ac57b7d8222ecaa4dde4",
+        "width": 736,
+        "height": 980,
+        "alt": "Brown wide leg sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/bd1cefabc6b6daabca3e4afef95ab2b19ceda69c1349364694a6d24f2db2c008.webp",
+        "pathname": "products/bd1cefabc6b6daabca3e4afef95ab2b19ceda69c1349364694a6d24f2db2c008.webp",
+        "checksum": "bd1cefabc6b6daabca3e4afef95ab2b19ceda69c1349364694a6d24f2db2c008",
+        "width": 736,
+        "height": 1298,
+        "alt": "Brown wide leg sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/7d46982581446086ecad0820035a4b62a018c5b446c4a5ab8b9e1b4e19cab781.webp",
+        "pathname": "products/7d46982581446086ecad0820035a4b62a018c5b446c4a5ab8b9e1b4e19cab781.webp",
+        "checksum": "7d46982581446086ecad0820035a4b62a018c5b446c4a5ab8b9e1b4e19cab781",
+        "width": 736,
+        "height": 980,
+        "alt": "Brown wide leg sweatpant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "grey-wide-leg-sweatpant",
+    "category": "WIDE_LEG_SWEATPANTS",
+    "title": "Grey wide leg sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 110000,
+    "size": "L",
+    "condition": "GOOD",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/e3ce7d1ed1a30aa8774bf3706757d38f6de882c3175cac1f0f803be6733ec2d5.webp",
+        "pathname": "products/e3ce7d1ed1a30aa8774bf3706757d38f6de882c3175cac1f0f803be6733ec2d5.webp",
+        "checksum": "e3ce7d1ed1a30aa8774bf3706757d38f6de882c3175cac1f0f803be6733ec2d5",
+        "width": 569,
+        "height": 1173,
+        "alt": "Grey wide leg sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/45a550d744893b36820d360c1e93ffc63458ed456fc52e4b186ee7ab1fcbfb06.webp",
+        "pathname": "products/45a550d744893b36820d360c1e93ffc63458ed456fc52e4b186ee7ab1fcbfb06.webp",
+        "checksum": "45a550d744893b36820d360c1e93ffc63458ed456fc52e4b186ee7ab1fcbfb06",
+        "width": 736,
+        "height": 1144,
+        "alt": "Grey wide leg sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/9308f943b8bd64c33c6d8be1df8195bdfacdde019c678366991ce519d7175d25.webp",
+        "pathname": "products/9308f943b8bd64c33c6d8be1df8195bdfacdde019c678366991ce519d7175d25.webp",
+        "checksum": "9308f943b8bd64c33c6d8be1df8195bdfacdde019c678366991ce519d7175d25",
+        "width": 600,
+        "height": 750,
+        "alt": "Grey wide leg sweatpant, view 3"
+      }
+    ]
+  },
+  {
+    "slug": "mix-wide-leg-sweatpant",
+    "category": "WIDE_LEG_SWEATPANTS",
+    "title": "Mix wide leg sweatpant",
+    "description": null,
+    "brand": null,
+    "priceCents": 140000,
+    "size": "M",
+    "condition": "EXCELLENT",
+    "gender": "UNISEX",
+    "images": [
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3ec10d818c5b2bad38fd7cb65ea07f53b48df208cfd46654c221e6fe07a1f69a.webp",
+        "pathname": "products/3ec10d818c5b2bad38fd7cb65ea07f53b48df208cfd46654c221e6fe07a1f69a.webp",
+        "checksum": "3ec10d818c5b2bad38fd7cb65ea07f53b48df208cfd46654c221e6fe07a1f69a",
+        "width": 736,
+        "height": 736,
+        "alt": "Mix wide leg sweatpant"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/ad7bd62d9a2e7e5eaf9ac4ab45d5b9cd4d9a06e6d970f88adabbec43010c45d2.webp",
+        "pathname": "products/ad7bd62d9a2e7e5eaf9ac4ab45d5b9cd4d9a06e6d970f88adabbec43010c45d2.webp",
+        "checksum": "ad7bd62d9a2e7e5eaf9ac4ab45d5b9cd4d9a06e6d970f88adabbec43010c45d2",
+        "width": 621,
+        "height": 1000,
+        "alt": "Mix wide leg sweatpant, view 2"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/de8b9a7b8c9a7c47e1cd5d34edeafbd44d67ee9d03c4d99e830bdb008631df36.webp",
+        "pathname": "products/de8b9a7b8c9a7c47e1cd5d34edeafbd44d67ee9d03c4d99e830bdb008631df36.webp",
+        "checksum": "de8b9a7b8c9a7c47e1cd5d34edeafbd44d67ee9d03c4d99e830bdb008631df36",
+        "width": 375,
+        "height": 500,
+        "alt": "Mix wide leg sweatpant, view 3"
+      },
+      {
+        "url": "https://jvxepm7qadfmrcpa.public.blob.vercel-storage.com/products/3ad7044708c04df55c7ebd30ac2a2ae7350aa0fc15c9cf0f2bb4d9f864a996f4.webp",
+        "pathname": "products/3ad7044708c04df55c7ebd30ac2a2ae7350aa0fc15c9cf0f2bb4d9f864a996f4.webp",
+        "checksum": "3ad7044708c04df55c7ebd30ac2a2ae7350aa0fc15c9cf0f2bb4d9f864a996f4",
+        "width": 736,
+        "height": 981,
+        "alt": "Mix wide leg sweatpant, view 4"
+      }
+    ]
+  }
+]

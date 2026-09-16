@@ -43,6 +43,35 @@ seed-images/
 
 Accepted formats: JPEG, PNG, WebP, HEIC.
 
+### Which category
+
+| Folder                | Goes in                                                                                        | Doesn't                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `hoodies`             | Anything with a hood: pullovers, zip-ups, hooded sweatshirts, sherpa-lined, cropped, oversized | Hooded _jackets_ — nylon shells, denim         |
+| `sweatshirts`         | Fleece-backed tops with **no** hood: crewnecks, quarter-zips, mock necks                       | Anything hooded; knitted jumpers and cardigans |
+| `t-shirts`            | Jersey knit: plain, graphic and band tees, long-sleeve tees, tanks, polos                      | Button-front shirts                            |
+| `flannels`            | Button-front brushed-cotton shirts — plaid, check, plain                                       | Overshirts heavy enough to be a jacket         |
+| `sweatpants`          | Elasticated waist, tapered or straight: joggers, cuffed sweats, track pants                    | Wide legs; thigh pockets                       |
+| `wide-leg-sweatpants` | Same fabric, leg falling straight and wide from the knee: baggy, flared, puddle pants          | Tapered or cuffed legs                         |
+| `side-pocket-pants`   | Pockets on the outside of the thigh: cargos, utility and combat trousers, cargo sweatpants     | Only ordinary hip and back pockets             |
+| `underwear`           | Briefs, boxers, bralettes, sets                                                                | —                                              |
+
+When two categories fit, the more specific one wins:
+
+- **A hooded sweatshirt is a hoodie.** The hood is what someone shops for, so it
+  beats the fabric. `sweatshirts` means crewnecks in practice.
+- **Cargo sweatpants are `side-pocket-pants`.** Fabric says sweatpants, pockets
+  say side-pocket — and the pockets are why that category exists separately.
+- **Wide-leg is about silhouette, not fabric.** If you hesitate, it's regular.
+
+The rule behind all three: file it where a buyer would go looking, not where it
+technically belongs.
+
+Jackets, plain button-up shirts, knitwear, shorts, dresses and skirts have no
+folder, because the shop does not stock them. Hesitating over a photo because
+nothing fits is the signal that a category is missing — that is a schema change,
+not a judgement call, so raise it rather than forcing the item somewhere.
+
 ### Getting the order right
 
 Sorting is numeric-aware, so `9.jpg` comes before `10.jpg` rather than after it,

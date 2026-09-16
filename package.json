@@ -22,7 +22,8 @@
     "db:studio": "prisma studio",
     "seed:upload": "tsx scripts/upload-seed-images.mts",
     "seed": "tsx prisma/seed.mts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

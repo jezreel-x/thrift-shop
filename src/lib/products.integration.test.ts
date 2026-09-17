@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
 import { db, cleanDatabaseBetweenTests } from "@/test/db";
-import { PAGE_SIZE, getProductBySlug, listProductSlugs, listProducts } from "./products";
+import { PAGE_SIZE, getProductBySlug, listProducts, listSitemapEntries } from "./products";
 
 cleanDatabaseBetweenTests();
 
@@ -325,11 +325,25 @@ describe("getProductBySlug", () => {
   });
 });
 
-describe("listProductSlugs", () => {
-  it("lists live slugs and omits deleted ones", async () => {
+describe("listSitemapEntries", () => {
+  it("lists live products and omits deleted ones", async () => {
     await makeProduct({ slug: "alive" });
     await makeProduct({ slug: "gone", deletedAt: new Date() });
 
-    expect(await listProductSlugs()).toEqual(["alive"]);
+    expect((await listSitemapEntries()).map((entry) => entry.slug)).toEqual(["alive"]);
+  });
+
+  it("includes sold items, which still answer the search that found them", async () => {
+    await makeProduct({ slug: "sold", status: ProductStatus.SOLD });
+
+    expect((await listSitemapEntries()).map((entry) => entry.slug)).toContain("sold");
+  });
+
+  it("carries each product's own updatedAt, so a crawler can tell what changed", async () => {
+    const product = await makeProduct({ slug: "dated" });
+    const [entry] = await listSitemapEntries();
+
+    expect(entry.updatedAt).toBeInstanceOf(Date);
+    expect(entry.updatedAt.getTime()).toBe(product.updatedAt.getTime());
   });
 });

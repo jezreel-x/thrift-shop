@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,16 +14,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-/**
- * Absolute URLs for Open Graph and canonical tags. Vercel injects VERCEL_URL
- * per deployment, so preview builds describe themselves rather than pointing
- * search engines and link previews at production.
- */
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
 export const metadata: Metadata = {
+  // Makes every relative canonical and Open Graph URL below absolute.
   metadataBase: new URL(siteUrl),
   title: {
     default: "The Thrift Plug — secondhand fashion in Nairobi",

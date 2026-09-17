@@ -111,15 +111,20 @@ export async function getProductBySlug(slug: string) {
   });
 }
 
-/** Every slug currently visible, for the sitemap and static params. */
-export async function listProductSlugs(): Promise<string[]> {
-  const rows = await prisma.product.findMany({
+/**
+ * Every visible product, for the sitemap.
+ *
+ * Sold items are included deliberately. A sold page still answers the search
+ * that led someone to it, and its structured data says SoldOut — dropping them
+ * would, in a shop where everything is one of one, eventually remove most of
+ * the catalogue from search entirely.
+ */
+export async function listSitemapEntries(): Promise<{ slug: string; updatedAt: Date }[]> {
+  return prisma.product.findMany({
     where: { deletedAt: null },
-    select: { slug: true },
+    select: { slug: true, updatedAt: true },
     orderBy: { createdAt: "desc" },
   });
-
-  return rows.map((row) => row.slug);
 }
 
 function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {

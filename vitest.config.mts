@@ -9,6 +9,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Integration tests need a database and their own config; `npm run
+    // test:integration` runs those.
+    exclude: ["src/**/*.integration.test.ts"],
     globals: true,
   },
 });

@@ -49,3 +49,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Seed photography. The originals are not committed: git has no delta
+# compression for binaries, so every reshoot would live in history forever, and
+# production serves these from blob storage anyway. `npm run seed:upload`
+# uploads them and writes prisma/seed-manifest.json, which IS committed.
+/seed-images/*
+!/seed-images/README.md

@@ -1,0 +1,39 @@
+# Postgres for integration tests.
+#
+# Tests run against a real database rather than a mock, because the things worth
+# testing here — filter combinations, sort order, and in Phase 2 two checkouts
+# racing for one item — are behaviours of Postgres, not of application code. A
+# mock would assert that we called Prisma, which proves nothing.
+#
+#   docker compose up -d
+#   npm run test:integration
+#
+# Port 5434 rather than the default 5432, so this never collides with another
+# Postgres on the machine — 5433 is already taken by an unrelated project's
+# container here, which is exactly the clash this avoids. Version 18 matches
+# Neon, so a query that behaves here behaves in production.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: thrift-shop-test-db
+    environment:
+      POSTGRES_USER: thrift
+      POSTGRES_PASSWORD: thrift
+      POSTGRES_DB: thrift_shop_test
+    ports:
+      - "5434:5432"
+    volumes:
+      # Mounted at /var/lib/postgresql, not .../data. Postgres 18's image stores
+      # its cluster in a major-version-specific subdirectory so that pg_upgrade
+      # can work across a single mount point; mounting the old path makes the
+      # container refuse to start.
+      - test-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thrift -d thrift_shop_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  test-db-data:

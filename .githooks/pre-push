@@ -1,0 +1,37 @@
+#!/bin/sh
+#
+# Runs the same gates as .github/workflows/ci.yml before allowing a push.
+#
+# This exists because GitHub Actions is unavailable on this account, so nothing
+# is checking these commits except the person making them. It is a stand-in, not
+# a replacement: it runs only what is on this machine, only for whoever pushes,
+# and it can be skipped. CI remains the thing that actually has to go green.
+#
+# To skip deliberately:  git push --no-verify
+#
+# Installed by `npm install`, which points core.hooksPath at this directory.
+
+set -e
+
+echo "pre-push: running the CI gates locally..."
+
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+
+# Integration tests need the Docker Postgres from docker-compose.yml. Skipped
+# with a warning rather than failing the push when it is not running: refusing
+# to push because Docker Desktop is closed would train people to use
+# --no-verify, which costs more than these tests are worth on any single push.
+if docker compose ps --status running --quiet postgres >/dev/null 2>&1 &&
+	[ -n "$(docker compose ps --status running --quiet postgres 2>/dev/null)" ]; then
+	npm run test:integration
+else
+	echo ""
+	echo "pre-push: SKIPPED integration tests — the test database is not running."
+	echo "          Start it with \`npm run db:test:up\` to include them."
+	echo ""
+fi
+
+echo "pre-push: all gates passed."

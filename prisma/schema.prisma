@@ -114,11 +114,17 @@ model Product {
   status ProductStatus @default(AVAILABLE)
 
   // When the current reservation lapses. Non-null only while status is RESERVED.
-  // The conditional-update reservation and the sweep that releases expired holds
-  // arrive in Phase 2; the column lives here because a RESERVED row without an
-  // expiry is an item lost from the catalogue forever, and the enum already
-  // admits that state.
+  // A RESERVED row without an expiry is an item lost from the catalogue forever,
+  // so the two are written and cleared together.
   reservedUntil DateTime?
+
+  // Who holds the current reservation — a session or user id, kept opaque so the
+  // reservation layer does not need to know what authentication looks like.
+  //
+  // Without it a hold is anonymous, and any second visitor could complete
+  // checkout on someone else's reservation: the whole point is that this item is
+  // promised to one person for fifteen minutes.
+  reservedBy String?
 
   images        ProductImage[]
   statusHistory ProductStatusHistory[]
@@ -140,6 +146,9 @@ model Product {
   @@index([status, priceCents])
   @@index([status, createdAt])
   @@index([deletedAt])
+  // The sweep asks for reservations that have lapsed. Without this it scans the
+  // whole catalogue every time it runs, which is every minute or so forever.
+  @@index([status, reservedUntil])
 }
 
 model ProductImage {

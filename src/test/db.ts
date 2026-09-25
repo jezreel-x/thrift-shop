@@ -20,7 +20,8 @@ import { prisma } from "@/lib/prisma";
  */
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE "ProductStatusHistory", "ProductImage", "Product" RESTART IDENTITY CASCADE`,
+    `TRUNCATE TABLE "ProductStatusHistory", "ProductImage", "Product", "Session", "User" ` +
+      `RESTART IDENTITY CASCADE`,
   );
 }
 

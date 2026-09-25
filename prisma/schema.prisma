@@ -213,3 +213,78 @@ model ProductStatusHistory {
 
   @@index([productId, createdAt])
 }
+
+// ----------------------------- Accounts -----------------------------
+
+// Who someone is to the shop.
+//
+// Two values, because the shop has two kinds of people: the person buying and
+// the person who owns the stock. Phase 3's admin area gates on OWNER. Anything
+// finer — staff, a second seller — can be added when somebody actually needs it.
+enum Role {
+  CUSTOMER
+  OWNER
+}
+
+model User {
+  id String @id @default(cuid())
+
+  // Stored lowercased, and compared that way. Nobody thinks of Grace@… and
+  // grace@… as two accounts, and letting both exist means one of them silently
+  // cannot log in.
+  email String @unique
+
+  // argon2id. Never the password, never a reversible encoding of it.
+  passwordHash String
+
+  // What to call them in an order confirmation. Optional because insisting on it
+  // at sign-up costs completions, and the shop can ask at checkout instead.
+  name String?
+
+  role Role @default(CUSTOMER)
+
+  sessions Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A signed-in browser.
+//
+// Sessions live in the database rather than in a signed token, which makes
+// revocation a DELETE instead of a problem. A JWT cannot be withdrawn once
+// issued, which is why systems that use them grow refresh tokens, rotation,
+// reuse detection and a revocation list — machinery that exists entirely to
+// claw back control that was given away by the choice of mechanism. One indexed
+// lookup per request is a cheaper price, on a page that already queries this
+// database to render itself.
+model Session {
+  // The SHA-256 of the token in the cookie, never the token itself — so a
+  // database leak yields nothing anyone can sign in with.
+  //
+  // Hashed with SHA-256 rather than argon2 deliberately: argon2 is slow on
+  // purpose to make guessing a human-chosen password expensive. This token is
+  // 32 random bytes, so guessing is already hopeless, and slow hashing here
+  // would only tax every page load.
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Sliding: extended when the session is used, so somebody who keeps shopping
+  // is never signed out, and somebody who stops is forgotten a week later.
+  expiresAt DateTime
+
+  // For the account page: "Chrome on Android, last used yesterday". Enough to
+  // recognise a session that is not yours, and nothing more identifying than the
+  // request already carried.
+  userAgent String?
+  ipAddress String?
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
+  // The sweep that clears expired sessions asks only this.
+  @@index([expiresAt])
+}

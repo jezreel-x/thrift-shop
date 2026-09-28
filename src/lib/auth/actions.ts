@@ -3,6 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { CART_COOKIE, mergeAnonymousCart } from "../cart";
 import { prisma } from "../prisma";
 import { safeReturnTo } from "./current-user";
 import {
@@ -124,4 +125,15 @@ async function startSession(userId: string): Promise<void> {
   });
 
   store.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
+
+  // Somebody who fills a cart and is then asked to sign in must not find it
+  // empty on the other side. That is precisely the moment a purchase gets
+  // abandoned — and the reason the cart is allowed to exist anonymously at all.
+  const anonymousCartId = store.get(CART_COOKIE)?.value;
+  if (anonymousCartId) {
+    await mergeAnonymousCart(anonymousCartId, userId);
+    // The cart is now found by user id; leaving the cookie would have it
+    // resolve to a stale, unclaimed cart on the next visit.
+    store.delete(CART_COOKIE);
+  }
 }

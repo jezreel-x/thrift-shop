@@ -128,6 +128,7 @@ model Product {
 
   images        ProductImage[]
   statusHistory ProductStatusHistory[]
+  cartItems     CartItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -244,6 +245,7 @@ model User {
   role Role @default(CUSTOMER)
 
   sessions Session[]
+  cart     Cart?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -287,4 +289,53 @@ model Session {
   @@index([userId])
   // The sweep that clears expired sessions asks only this.
   @@index([expiresAt])
+}
+
+// ------------------------------- Cart -------------------------------
+
+// A shortlist, not a claim on anything.
+//
+// Adding to a cart reserves nothing. If it did, anyone could freeze the whole
+// catalogue by browsing: ten shoppers with five items each would empty a
+// one-of-one shop while selling nothing. Two carts may hold the same jacket;
+// whoever reaches checkout first gets it.
+//
+// What it is actually for, in a shop where payment is confirmed by hand: three
+// items become one M-Pesa transaction, one confirmation code and one approval,
+// instead of three of each.
+model Cart {
+  id String @id @default(cuid())
+
+  // Null while the shopper is anonymous — the cart is found by a cookie until
+  // they sign in, at which point it is claimed or merged into the one they
+  // already had. Unique because a person has one cart.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  // Touched whenever the contents change, so abandoned anonymous carts can be
+  // swept without disturbing one somebody is still using.
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model CartItem {
+  id     String @id @default(cuid())
+  cartId String
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // No quantity column, for the same reason Product has none: the row is the
+  // garment. "Two of these" is not a thing anyone can ask for here, and the
+  // unique constraint is what makes adding twice idempotent rather than an
+  // error to handle.
+  @@unique([cartId, productId])
+  @@index([cartId])
 }

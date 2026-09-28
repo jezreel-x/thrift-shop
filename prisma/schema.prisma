@@ -431,3 +431,49 @@ model OrderItem {
   @@unique([orderId, productId])
   @@index([productId])
 }
+
+// ----------------------------- Settings -----------------------------
+
+// How the shop takes money, and anything else the owner sets rather than a
+// developer.
+//
+// In the database rather than in environment variables because of who owns it.
+// A connection string belongs to whoever deploys; a till number belongs to the
+// shop. If she moves from Pochi to a registered paybill, that is a Tuesday — it
+// should not need a developer and a release.
+//
+// One row. Typed columns rather than the key/value pairs a larger platform would
+// use: with a handful of settings, columns give validation and no parsing at
+// every read, and a key/value store only pays off once adding a setting would
+// otherwise mean a migration every week.
+//
+// Phase 3 puts an admin form on this, and that is when an audit of changes earns
+// its place — a till number that changed without anyone remembering is how money
+// reaches the wrong account, and it is unanswerable afterwards without a record.
+model ShopSettings {
+  // Fixed, so there can only ever be one row.
+  id String @id @default("singleton")
+
+  // Null until the owner has somewhere to be paid. Checkout says so plainly
+  // rather than inventing a number.
+  payment       PaymentMethod?
+  paymentName   String? // "The Thrift Plug" — what the buyer sees on their phone
+  // Till, paybill or phone number, depending on `payment`.
+  tillNumber    String?
+  // Paybill only: what the buyer puts in the account field.
+  accountNumber String?
+
+  // Shown on the checkout page, under the payment details.
+  paymentNote String?
+
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentMethod {
+  // Buy Goods and Services — a till number.
+  TILL
+  // Paybill, which also needs an account number.
+  PAYBILL
+  // Pochi la Biashara — pays a phone number.
+  POCHI
+}

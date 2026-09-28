@@ -129,6 +129,7 @@ model Product {
   images        ProductImage[]
   statusHistory ProductStatusHistory[]
   cartItems     CartItem[]
+  orderItems    OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -246,6 +247,7 @@ model User {
 
   sessions Session[]
   cart     Cart?
+  orders   Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -338,4 +340,94 @@ model CartItem {
   // error to handle.
   @@unique([cartId, productId])
   @@index([cartId])
+}
+
+// ------------------------------ Orders ------------------------------
+
+// Where an order is in the one flow it has.
+//
+// Payment is confirmed by a person reading their M-Pesa messages, so the
+// interesting states are the two waits: the buyer paying, and the owner
+// checking. Everything else is terminal.
+enum OrderStatus {
+  // Items are held; the buyer has not said they have paid.
+  AWAITING_PAYMENT
+  // The buyer has given an M-Pesa code. Nobody has checked it yet.
+  PENDING_CONFIRMATION
+  // The owner matched it against her SMS. Items are SOLD.
+  CONFIRMED
+  // The owner could not match it. Items returned to the rail.
+  REJECTED
+  // Abandoned, or every hold lapsed before payment.
+  CANCELLED
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  // What the buyer quotes and the owner searches for. Short, and drawn from an
+  // alphabet without 0/O or 1/I/L, because it gets read aloud over WhatsApp and
+  // typed back by someone who is not looking at the screen.
+  reference String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  status OrderStatus @default(AWAITING_PAYMENT)
+
+  // Copied at checkout rather than read from the account later. An order is a
+  // record of an agreement, and the phone number it was placed with is part of
+  // that — changing it on the profile afterwards must not rewrite history.
+  buyerName  String
+  buyerPhone String
+
+  // The M-Pesa transaction code the buyer says they paid with.
+  //
+  // Unique across every order, and that constraint is the single most effective
+  // check available in v1: the app cannot ask Safaricom whether a code is real,
+  // but it can refuse to let one be spent twice. Reusing a code from an earlier
+  // purchase — or one a friend forwarded — fails at the database.
+  mpesaCode String?   @unique
+  claimedAt DateTime?
+
+  // The owner's decision, and why.
+  reviewedAt DateTime?
+  reviewNote String?
+
+  // What the buyer actually agreed to pay, summed at checkout. Never recomputed
+  // from current prices.
+  totalCents Int
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  // Restrict, not Cascade: a product that has been sold cannot be deleted out
+  // from under the order that sold it. Withdrawing it from the catalogue is what
+  // `deletedAt` is for.
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // Snapshots of what was sold, at the price agreed.
+  //
+  // Reading these through the product would mean repricing an item silently
+  // rewrites the history of every order that contained it — a bug you discover
+  // during a dispute, which is the worst possible moment.
+  title      String
+  size       String
+  priceCents Int
+
+  // One of one: a product appears at most once on an order.
+  @@unique([orderId, productId])
+  @@index([productId])
 }

@@ -114,6 +114,13 @@ shop while selling nothing. Two carts may contain the same jacket; whoever
 reaches checkout first gets it, and the other is told at checkout rather than
 after paying.
 
+## If the shop ever sells bulk stock
+
+One product with many sizes and a quantity is the ordinary e-commerce model, and
+it is deliberately not this one — it would replace the problem described above
+with arithmetic. The reasoning, and what the migration would cost if the business
+ever changes shape, is in [product-variants.md](product-variants.md).
+
 ## Where this lives
 
 |                                            |                                                |

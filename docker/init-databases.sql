@@ -1,0 +1,12 @@
+-- Runs once, when the Postgres volume is first created.
+--
+-- The container hosts two databases with different jobs:
+--
+--   thrift_shop_test  the integration suite, truncated between every test
+--   thrift_shop_dev   where new migrations are generated and tried first
+--
+-- They are separate because the test database is deliberately empty most of the
+-- time, and an empty database is exactly where a bad migration looks fine. A
+-- column added as NOT NULL succeeds against no rows and fails against real ones,
+-- so migrations are developed against a database that has data in it.
+CREATE DATABASE thrift_shop_dev OWNER thrift;

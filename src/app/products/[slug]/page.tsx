@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AddToCart } from "@/components/add-to-cart";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductStatus } from "@/generated/prisma/enums";
 import { CATEGORY_LABELS, CONDITION_LABELS, GENDER_LABELS } from "@/lib/catalogue";
 import { formatPrice } from "@/lib/money";
+import { readCart } from "@/lib/cart-session";
 import { buildProductQuery } from "@/lib/product-search-params";
 import { getProductBySlug } from "@/lib/products";
 
@@ -52,6 +54,9 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
 
   const isSold = product.status === ProductStatus.SOLD;
   const isReserved = product.status === ProductStatus.RESERVED;
+
+  const cart = await readCart();
+  const inCart = cart?.lines.some((line) => line.productId === product.id) ?? false;
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -122,10 +127,13 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
               </p>
             ) : (
               <p className="text-neutral-600 dark:text-neutral-400">
-                Available. Checkout opens soon — reserving and paying by M-Pesa arrives in the next
-                release.
+                Available. A cart holds nothing — the piece is yours once you reach checkout.
               </p>
             )}
+          </div>
+
+          <div className="mt-6">
+            <AddToCart productId={product.id} inCart={inCart} disabled={isSold} />
           </div>
         </div>
       </div>

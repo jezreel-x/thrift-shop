@@ -29,6 +29,8 @@ services:
       # can work across a single mount point; mounting the old path makes the
       # container refuse to start.
       - test-db-data:/var/lib/postgresql
+      # Creates the second database, for developing migrations against.
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U thrift -d thrift_shop_test"]
       interval: 2s

@@ -14,8 +14,11 @@ import { dirname, join } from "node:path";
 export default function setup() {
   const url = requireTestDatabaseUrl();
 
+  // PRISMA_DATABASE_URL, not DATABASE_URL: prisma7.config.ts chooses the CLI's
+  // target itself rather than inheriting whatever the application is pointed at,
+  // so this is the one variable it will take an exact address from.
   execFileSync(process.execPath, [prismaCliPath(), "migrate", "deploy"], {
-    env: { ...process.env, DATABASE_URL: url, DIRECT_DATABASE_URL: url },
+    env: { ...process.env, PRISMA_DATABASE_URL: url },
     stdio: "inherit",
   });
 }

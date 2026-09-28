@@ -114,14 +114,22 @@ model Product {
   status ProductStatus @default(AVAILABLE)
 
   // When the current reservation lapses. Non-null only while status is RESERVED.
-  // The conditional-update reservation and the sweep that releases expired holds
-  // arrive in Phase 2; the column lives here because a RESERVED row without an
-  // expiry is an item lost from the catalogue forever, and the enum already
-  // admits that state.
+  // A RESERVED row without an expiry is an item lost from the catalogue forever,
+  // so the two are written and cleared together.
   reservedUntil DateTime?
+
+  // Who holds the current reservation — a session or user id, kept opaque so the
+  // reservation layer does not need to know what authentication looks like.
+  //
+  // Without it a hold is anonymous, and any second visitor could complete
+  // checkout on someone else's reservation: the whole point is that this item is
+  // promised to one person for fifteen minutes.
+  reservedBy String?
 
   images        ProductImage[]
   statusHistory ProductStatusHistory[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,6 +148,9 @@ model Product {
   @@index([status, priceCents])
   @@index([status, createdAt])
   @@index([deletedAt])
+  // The sweep asks for reservations that have lapsed. Without this it scans the
+  // whole catalogue every time it runs, which is every minute or so forever.
+  @@index([status, reservedUntil])
 }
 
 model ProductImage {
@@ -203,4 +214,272 @@ model ProductStatusHistory {
   createdAt DateTime @default(now())
 
   @@index([productId, createdAt])
+}
+
+// ----------------------------- Accounts -----------------------------
+
+// Who someone is to the shop.
+//
+// Two values, because the shop has two kinds of people: the person buying and
+// the person who owns the stock. Phase 3's admin area gates on OWNER. Anything
+// finer — staff, a second seller — can be added when somebody actually needs it.
+enum Role {
+  CUSTOMER
+  OWNER
+}
+
+model User {
+  id String @id @default(cuid())
+
+  // Stored lowercased, and compared that way. Nobody thinks of Grace@… and
+  // grace@… as two accounts, and letting both exist means one of them silently
+  // cannot log in.
+  email String @unique
+
+  // argon2id. Never the password, never a reversible encoding of it.
+  passwordHash String
+
+  // What to call them in an order confirmation. Optional because insisting on it
+  // at sign-up costs completions, and the shop can ask at checkout instead.
+  name String?
+
+  // Canonical 254XXXXXXXXX. Asked for once at checkout and remembered, because
+  // a shop that confirms payments by hand and arranges delivery over WhatsApp
+  // needs a way to reach the buyer, and retyping it every order is how a
+  // purchase gets abandoned.
+  phone String?
+
+  role Role @default(CUSTOMER)
+
+  sessions Session[]
+  cart     Cart?
+  orders   Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A signed-in browser.
+//
+// Sessions live in the database rather than in a signed token, which makes
+// revocation a DELETE instead of a problem. A JWT cannot be withdrawn once
+// issued, which is why systems that use them grow refresh tokens, rotation,
+// reuse detection and a revocation list — machinery that exists entirely to
+// claw back control that was given away by the choice of mechanism. One indexed
+// lookup per request is a cheaper price, on a page that already queries this
+// database to render itself.
+model Session {
+  // The SHA-256 of the token in the cookie, never the token itself — so a
+  // database leak yields nothing anyone can sign in with.
+  //
+  // Hashed with SHA-256 rather than argon2 deliberately: argon2 is slow on
+  // purpose to make guessing a human-chosen password expensive. This token is
+  // 32 random bytes, so guessing is already hopeless, and slow hashing here
+  // would only tax every page load.
+  id String @id
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Sliding: extended when the session is used, so somebody who keeps shopping
+  // is never signed out, and somebody who stops is forgotten a week later.
+  expiresAt DateTime
+
+  // For the account page: "Chrome on Android, last used yesterday". Enough to
+  // recognise a session that is not yours, and nothing more identifying than the
+  // request already carried.
+  userAgent String?
+  ipAddress String?
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
+  // The sweep that clears expired sessions asks only this.
+  @@index([expiresAt])
+}
+
+// ------------------------------- Cart -------------------------------
+
+// A shortlist, not a claim on anything.
+//
+// Adding to a cart reserves nothing. If it did, anyone could freeze the whole
+// catalogue by browsing: ten shoppers with five items each would empty a
+// one-of-one shop while selling nothing. Two carts may hold the same jacket;
+// whoever reaches checkout first gets it.
+//
+// What it is actually for, in a shop where payment is confirmed by hand: three
+// items become one M-Pesa transaction, one confirmation code and one approval,
+// instead of three of each.
+model Cart {
+  id String @id @default(cuid())
+
+  // Null while the shopper is anonymous — the cart is found by a cookie until
+  // they sign in, at which point it is claimed or merged into the one they
+  // already had. Unique because a person has one cart.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items CartItem[]
+
+  createdAt DateTime @default(now())
+  // Touched whenever the contents change, so abandoned anonymous carts can be
+  // swept without disturbing one somebody is still using.
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model CartItem {
+  id     String @id @default(cuid())
+  cartId String
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // No quantity column, for the same reason Product has none: the row is the
+  // garment. "Two of these" is not a thing anyone can ask for here, and the
+  // unique constraint is what makes adding twice idempotent rather than an
+  // error to handle.
+  @@unique([cartId, productId])
+  @@index([cartId])
+}
+
+// ------------------------------ Orders ------------------------------
+
+// Where an order is in the one flow it has.
+//
+// Payment is confirmed by a person reading their M-Pesa messages, so the
+// interesting states are the two waits: the buyer paying, and the owner
+// checking. Everything else is terminal.
+enum OrderStatus {
+  // Items are held; the buyer has not said they have paid.
+  AWAITING_PAYMENT
+  // The buyer has given an M-Pesa code. Nobody has checked it yet.
+  PENDING_CONFIRMATION
+  // The owner matched it against her SMS. Items are SOLD.
+  CONFIRMED
+  // The owner could not match it. Items returned to the rail.
+  REJECTED
+  // Abandoned, or every hold lapsed before payment.
+  CANCELLED
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  // What the buyer quotes and the owner searches for. Short, and drawn from an
+  // alphabet without 0/O or 1/I/L, because it gets read aloud over WhatsApp and
+  // typed back by someone who is not looking at the screen.
+  reference String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  status OrderStatus @default(AWAITING_PAYMENT)
+
+  // Copied at checkout rather than read from the account later. An order is a
+  // record of an agreement, and the phone number it was placed with is part of
+  // that — changing it on the profile afterwards must not rewrite history.
+  buyerName  String
+  buyerPhone String
+
+  // The M-Pesa transaction code the buyer says they paid with.
+  //
+  // Unique across every order, and that constraint is the single most effective
+  // check available in v1: the app cannot ask Safaricom whether a code is real,
+  // but it can refuse to let one be spent twice. Reusing a code from an earlier
+  // purchase — or one a friend forwarded — fails at the database.
+  mpesaCode String?   @unique
+  claimedAt DateTime?
+
+  // The owner's decision, and why.
+  reviewedAt DateTime?
+  reviewNote String?
+
+  // What the buyer actually agreed to pay, summed at checkout. Never recomputed
+  // from current prices.
+  totalCents Int
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  // Restrict, not Cascade: a product that has been sold cannot be deleted out
+  // from under the order that sold it. Withdrawing it from the catalogue is what
+  // `deletedAt` is for.
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // Snapshots of what was sold, at the price agreed.
+  //
+  // Reading these through the product would mean repricing an item silently
+  // rewrites the history of every order that contained it — a bug you discover
+  // during a dispute, which is the worst possible moment.
+  title      String
+  size       String
+  priceCents Int
+
+  // One of one: a product appears at most once on an order.
+  @@unique([orderId, productId])
+  @@index([productId])
+}
+
+// ----------------------------- Settings -----------------------------
+
+// How the shop takes money, and anything else the owner sets rather than a
+// developer.
+//
+// In the database rather than in environment variables because of who owns it.
+// A connection string belongs to whoever deploys; a till number belongs to the
+// shop. If she moves from Pochi to a registered paybill, that is a Tuesday — it
+// should not need a developer and a release.
+//
+// One row. Typed columns rather than the key/value pairs a larger platform would
+// use: with a handful of settings, columns give validation and no parsing at
+// every read, and a key/value store only pays off once adding a setting would
+// otherwise mean a migration every week.
+//
+// Phase 3 puts an admin form on this, and that is when an audit of changes earns
+// its place — a till number that changed without anyone remembering is how money
+// reaches the wrong account, and it is unanswerable afterwards without a record.
+model ShopSettings {
+  // Fixed, so there can only ever be one row.
+  id String @id @default("singleton")
+
+  // Null until the owner has somewhere to be paid. Checkout says so plainly
+  // rather than inventing a number.
+  payment       PaymentMethod?
+  paymentName   String? // "The Thrift Plug" — what the buyer sees on their phone
+  // Till, paybill or phone number, depending on `payment`.
+  tillNumber    String?
+  // Paybill only: what the buyer puts in the account field.
+  accountNumber String?
+
+  // Shown on the checkout page, under the payment details.
+  paymentNote String?
+
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentMethod {
+  // Buy Goods and Services — a till number.
+  TILL
+  // Paybill, which also needs an account number.
+  PAYBILL
+  // Pochi la Biashara — pays a phone number.
+  POCHI
 }

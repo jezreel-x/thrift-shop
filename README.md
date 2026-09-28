@@ -98,7 +98,21 @@ WHERE id = $1 AND status = 'AVAILABLE'
 ```
 
 — with a scheduled sweep releasing expired reservations so an abandoned checkout does not retire an
-item permanently. Arriving in Phase 2, with a concurrency test alongside it.
+item permanently. Measured: the naive read-then-write grants the same jacket to 20 of 20 simultaneous
+buyers; this grants it to one. Written up in [docs/one-of-one-stock.md](docs/one-of-one-stock.md).
+
+**Sessions live in the database, not in a signed token.** A JWT cannot be withdrawn once issued,
+which is why systems built on them grow refresh tokens, rotation, reuse detection and revocation
+lists — machinery whose purpose is to recover control the design gave away. A row can be deleted.
+Passwords use argon2id at OWASP's parameters. See
+[docs/authentication.md](docs/authentication.md), which also covers the three mistakes that work
+perfectly in testing and are vulnerabilities in production.
+
+**Four databases, with separate jobs.** The application reads a local Postgres in development and
+Neon in production, so development cannot touch live stock or customers. Migrations are generated
+against a seeded local database and reach production only through `db:deploy`. Before that
+separation existed, `migrate dev` — a command that offers to reset a database it finds out of step
+— was pointed at the live catalogue.
 
 **Filters live in the URL, in a form with no client JavaScript.** `/?size=M&category=HOODIES` is a
 real page — linkable, shareable over WhatsApp, surviving a refresh, and reachable by a crawler. Held

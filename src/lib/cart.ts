@@ -260,3 +260,36 @@ function unavailableReason(
 function touch(cartId: string) {
   return prisma.cart.update({ where: { id: cartId }, data: {} });
 }
+
+/**
+ * Finds an existing cart without creating one.
+ *
+ * Separate from {@link resolveCart} because a server component rendering a page
+ * must not have the side effect of creating a row — every visit from a crawler
+ * would leave one behind.
+ */
+export async function findCart(options: {
+  userId?: string;
+  anonymousCartId?: string;
+}): Promise<string | null> {
+  const { userId, anonymousCartId } = options;
+
+  if (userId) {
+    const cart = await prisma.cart.findUnique({ where: { userId }, select: { id: true } });
+    return cart?.id ?? null;
+  }
+
+  if (!anonymousCartId) return null;
+
+  const cart = await prisma.cart.findFirst({
+    where: { id: anonymousCartId, userId: null },
+    select: { id: true },
+  });
+
+  return cart?.id ?? null;
+}
+
+/** How many items are in a cart, for the header. */
+export async function countCartItems(cartId: string): Promise<number> {
+  return prisma.cartItem.count({ where: { cartId } });
+}

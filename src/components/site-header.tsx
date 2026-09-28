@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { countCartItems } from "@/lib/cart";
+import { readCartId } from "@/lib/cart-session";
 
 /**
  * The shop's one piece of persistent navigation.
@@ -11,6 +13,8 @@ import { getCurrentUser } from "@/lib/auth/current-user";
  */
 export async function SiteHeader() {
   const user = await getCurrentUser();
+  const cartId = await readCartId();
+  const cartCount = cartId ? await countCartItems(cartId) : 0;
 
   return (
     <header className="border-b border-neutral-200 dark:border-neutral-800">
@@ -20,6 +24,10 @@ export async function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-4 text-sm">
+          <Link href="/cart" className="underline-offset-4 hover:underline">
+            Cart{cartCount > 0 && <span className="text-neutral-500"> ({cartCount})</span>}
+          </Link>
+
           {user ? (
             <>
               <span className="hidden text-neutral-500 sm:inline dark:text-neutral-400">

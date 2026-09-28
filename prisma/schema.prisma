@@ -243,6 +243,12 @@ model User {
   // at sign-up costs completions, and the shop can ask at checkout instead.
   name String?
 
+  // Canonical 254XXXXXXXXX. Asked for once at checkout and remembered, because
+  // a shop that confirms payments by hand and arranges delivery over WhatsApp
+  // needs a way to reach the buyer, and retyping it every order is how a
+  // purchase gets abandoned.
+  phone String?
+
   role Role @default(CUSTOMER)
 
   sessions Session[]

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ContactForm } from "@/components/contact-form";
 import { PaymentClaimForm } from "@/components/payment-claim-form";
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
@@ -37,11 +38,24 @@ export default async function CheckoutPage() {
   const cartId = await readCartId();
   if (!cartId) redirect("/cart");
 
+  // Asked before anything is reserved, so the fifteen-minute hold is not spent
+  // typing. A shop that confirms payments by reading M-Pesa messages and
+  // arranges delivery over WhatsApp cannot fulfil an order without a number.
+  if (!user.phone) {
+    return (
+      <main className="mx-auto w-full max-w-sm flex-1 px-6 py-12">
+        <h1 className="text-2xl font-semibold tracking-tight">Almost there</h1>
+        <p className="mt-2 mb-8 text-sm text-neutral-600 dark:text-neutral-400">
+          We ask once, and remember it for next time.
+        </p>
+        <ContactForm name={user.name} />
+      </main>
+    );
+  }
+
   const result = await beginCheckout(user.id, cartId, {
     name: user.name ?? user.email,
-    // Collected properly at the next iteration; the account's email stands in
-    // so an order is never without a way to reach its buyer.
-    phone: "",
+    phone: user.phone,
   });
 
   if (!result.ok) redirect("/cart");

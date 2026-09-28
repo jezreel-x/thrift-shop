@@ -7,6 +7,8 @@ import { getCurrentUser } from "./auth/current-user";
 import { clearCart } from "./cart";
 import { readCartId } from "./cart-session";
 import { claimPayment } from "./orders";
+import { normalisePhone } from "./phone";
+import { prisma } from "./prisma";
 
 /**
  * The buyer telling us they have paid.
@@ -66,4 +68,36 @@ function explain(reason: string): string {
     default:
       return "We could not find that order.";
   }
+}
+
+export type ContactFormState = { error?: string };
+
+/**
+ * Collects the buyer's name and number, once, before anything is reserved.
+ *
+ * Asked before the holds start rather than after, so the fifteen minutes are
+ * not spent typing. Saved to the account, so the second order asks for nothing.
+ *
+ * A shop that confirms payments by reading M-Pesa messages and arranges
+ * delivery over WhatsApp cannot work without a number — this is not an optional
+ * profile field, it is how the order gets fulfilled.
+ */
+export async function saveContactAction(
+  _previous: ContactFormState,
+  formData: FormData,
+): Promise<ContactFormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in?next=%2Fcheckout");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const phone = normalisePhone(String(formData.get("phone") ?? ""));
+
+  if (name.length < 2) return { error: "Tell us what to call you." };
+  if (!phone) {
+    return { error: "That is not a Kenyan mobile number. Try 0712 345 678." };
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { name, phone } });
+
+  redirect("/checkout");
 }

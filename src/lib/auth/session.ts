@@ -38,6 +38,8 @@ export type SessionUser = {
   id: string;
   email: string;
   name: string | null;
+  /** Canonical 254XXXXXXXXX, or null until checkout has asked for it. */
+  phone: string | null;
   role: Role;
 };
 
@@ -102,7 +104,7 @@ export async function readSession(token: string | undefined): Promise<SessionUse
     select: {
       expiresAt: true,
       createdAt: true,
-      user: { select: { id: true, email: true, name: true, role: true } },
+      user: { select: { id: true, email: true, name: true, phone: true, role: true } },
     },
   });
 

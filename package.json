@@ -2,6 +2,9 @@
   "name": "thrift-shop",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24.7"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && node scripts/migrate-on-deploy.mjs && next build",
@@ -27,7 +30,6 @@
     "db:status": "cross-env PRISMA_TARGET=production prisma migrate status"
   },
   "dependencies": {
-    "@node-rs/argon2": "^2.2.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@vercel/blob": "^2.8.0",

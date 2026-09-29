@@ -32,7 +32,7 @@ every caller passes the check before any of them writes.
 
 This is not a rare race that needs hammering to reproduce. Measured against this
 schema with twenty simultaneous buyers, **all twenty won**, repeatably. The test
-that demonstrates it lives in `src/lib/reservations.integration.test.ts` and is
+that demonstrates it lives in `src/lib/shop/reservations.integration.test.ts` and is
 kept deliberately — a concurrency test that passes proves nothing unless it would
 fail against the bug.
 
@@ -123,8 +123,8 @@ ever changes shape, is in [product-variants.md](product-variants.md).
 
 ## Where this lives
 
-|                                            |                                                |
-| ------------------------------------------ | ---------------------------------------------- |
-| `src/lib/reservations.ts`                  | reserve, release, extend, confirm, sweep       |
-| `src/lib/reservations.integration.test.ts` | including the naive comparison                 |
-| `prisma/schema.prisma`                     | `ProductStatus`, `reservedUntil`, `reservedBy` |
+|                                                 |                                                |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `src/lib/shop/reservations.ts`                  | reserve, release, extend, confirm, sweep       |
+| `src/lib/shop/reservations.integration.test.ts` | including the naive comparison                 |
+| `prisma/schema.prisma`                          | `ProductStatus`, `reservedUntil`, `reservedBy` |

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { getCurrentUser } from "./auth/current-user";
+import { getCurrentUser } from "../auth/current-user";
 import { CART_COOKIE, type CartContents, findCart, getCartContents } from "./cart";
 
 /**

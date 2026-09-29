@@ -9,9 +9,9 @@ import {
   buildProductQuery,
   hasActiveFilters,
   parseProductQuery,
-} from "@/lib/product-search-params";
-import type { ProductQuery } from "@/lib/product-search-params";
-import { listProducts } from "@/lib/products";
+} from "@/lib/shop/product-search-params";
+import type { ProductQuery } from "@/lib/shop/product-search-params";
+import { listProducts } from "@/lib/shop/products";
 
 /**
  * Built per request rather than declared statically, because the canonical URL

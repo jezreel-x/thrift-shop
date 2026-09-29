@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { type ContactFormState, saveContactAction } from "@/lib/checkout-actions";
+import { type ContactFormState, saveContactAction } from "@/lib/shop/checkout-actions";
 
 /**
  * Asked once, before anything is reserved.

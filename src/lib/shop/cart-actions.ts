@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
-import { getCurrentUser } from "./auth/current-user";
+import { getCurrentUser } from "../auth/current-user";
 import {
   ANONYMOUS_CART_DAYS,
   CART_COOKIE,

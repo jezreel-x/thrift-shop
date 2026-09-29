@@ -2,9 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { ProductStatus } from "@/generated/prisma/enums";
-import { CONDITION_LABELS } from "@/lib/catalogue";
+import { CONDITION_LABELS } from "@/lib/shop/catalogue";
 import { formatPrice } from "@/lib/money";
-import type { ProductCard as ProductCardData } from "@/lib/products";
+import type { ProductCard as ProductCardData } from "@/lib/shop/products";
 
 /**
  * One garment in the grid.

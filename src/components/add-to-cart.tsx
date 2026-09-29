@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { addToCartAction, removeFromCartAction } from "@/lib/cart-actions";
+import { addToCartAction, removeFromCartAction } from "@/lib/shop/cart-actions";
 
 /**
  * The control on a product page.

@@ -1,5 +1,5 @@
 import { PaymentMethod } from "@/generated/prisma/enums";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 
 /**
  * Settings the shop owner controls, rather than whoever deploys.

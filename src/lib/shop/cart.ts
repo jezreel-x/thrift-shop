@@ -1,5 +1,5 @@
 import { ProductStatus } from "@/generated/prisma/enums";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 
 /**
  * The cart.

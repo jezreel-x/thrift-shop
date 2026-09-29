@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { countCartItems } from "@/lib/cart";
-import { readCartId } from "@/lib/cart-session";
+import { countCartItems } from "@/lib/shop/cart";
+import { readCartId } from "@/lib/shop/cart-session";
 
 /**
  * The shop's one piece of persistent navigation.

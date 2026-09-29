@@ -5,7 +5,7 @@ import { OrderBadge } from "@/components/order-badge";
 
 import { requireUser } from "@/lib/auth/current-user";
 import { formatPrice } from "@/lib/money";
-import { listOrders } from "@/lib/orders";
+import { listOrders } from "@/lib/shop/orders";
 
 export const metadata: Metadata = {
   title: "Your orders",

@@ -4,14 +4,22 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 /**
- * Applies pending migrations during a Vercel build, and only during one.
+ * Applies pending migrations during a production Vercel build, and only then.
  *
  * Until now, migrations reached production because somebody ran them by hand.
  * That works right up to the first time it is forgotten, and the symptom is a
  * deployment whose code expects a column the database does not have — errors on
  * live pages, at the worst possible moment, with no obvious cause.
  *
- * Deliberately skipped everywhere else. CI builds against a placeholder
+ * Production builds only — not every Vercel build. The first version checked
+ * VERCEL alone, which is set for preview deployments as well, and previews are
+ * configured with the production connection string. So pushing a branch applied
+ * its migrations to the live database before anyone had reviewed or merged it:
+ * on 28 September four migrations landed two minutes before the pull request
+ * that carried them was merged. An unmerged branch must not be able to change
+ * production.
+ *
+ * Deliberately skipped everywhere else, too. CI builds against a placeholder
  * connection string with no database behind it, and a local `npm run build`
  * should never quietly alter a shared database as a side effect of compiling.
  *
@@ -19,8 +27,11 @@ import { dirname, join } from "node:path";
  * has no power to reset or prompt.
  */
 
-if (!process.env.VERCEL) {
-  console.info("migrate-on-deploy: not a Vercel build, skipping migrations.");
+if (process.env.VERCEL_ENV !== "production") {
+  const where = process.env.VERCEL
+    ? `a ${process.env.VERCEL_ENV} Vercel build`
+    : "not a Vercel build";
+  console.info(`migrate-on-deploy: ${where}, skipping migrations.`);
   process.exit(0);
 }
 

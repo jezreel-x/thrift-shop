@@ -38,9 +38,23 @@ the session unreachable, which is correct rather than a limitation.
 
 ## Passwords use argon2id
 
-At the library defaults, which are the parameters OWASP recommends: 19 MiB of
-memory, two passes, one lane. Measured at roughly 38ms per hash — unnoticeable
-once at sign-in, ruinous across billions of guesses.
+At the parameters OWASP recommends: 19 MiB of memory, two passes, one lane.
+Measured at roughly 150ms per hash — unnoticeable once at sign-in, ruinous across
+billions of guesses.
+
+Computed by Node's built-in `crypto.argon2`, which arrived in Node 24.7, rather
+than a third-party package. The package used first shipped an unsigned native
+binary, and Windows Smart App Control refuses to load unsigned code — so on a
+machine enforcing it, sign-in, the password tests and the pre-push hook all
+failed. Node's implementation lives inside Node's own signed executable and needs
+no dependency. It writes the same PHC strings, so hashes made by the old package
+still verify; that was checked against a real one before the switch.
+
+`package.json` requires Node 24.7 or later, and the module refuses to load
+without `crypto.argon2`. Without that check an older Node would make every
+derivation throw, `verifyPassword` would turn each throw into `false`, and every
+sign-in would fail as "those details do not match" — a failure that looks
+exactly like people mistyping.
 
 **The memory is the point.** bcrypt uses about 4 KB, which fits comfortably in a
 GPU core's local memory, so thousands of guesses run in parallel very cheaply.
@@ -51,7 +65,7 @@ argon2 also has no equivalent of bcrypt's silent 72-byte truncation, where two
 different long passphrases sharing a prefix authenticate each other.
 
 A unit test asserts the memory parameter is still at least 19,456 KiB, because a
-library upgrade could otherwise lower it without anything failing.
+change to the parameters could otherwise lower it without anything failing.
 
 ## Three mistakes that work fine in testing
 

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/site";
+import { getStoredTheme } from "@/lib/theme/current-theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,9 +32,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Rendered into the first HTML so the page never flashes the other theme.
+  // Absent when nobody has chosen, which leaves globals.css to follow the device.
+  const theme = await getStoredTheme();
+
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      data-theme={theme ?? undefined}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col">
         <SiteHeader />
         {children}

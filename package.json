@@ -25,6 +25,8 @@
     "db:studio": "prisma studio",
     "seed:upload": "tsx scripts/upload-seed-images.mts",
     "seed": "tsx prisma/seed.mts",
+    "staff:grant-owner": "tsx scripts/grant-owner.mts",
+    "staff:grant-owner:production": "cross-env PRISMA_TARGET=production tsx scripts/grant-owner.mts",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks || true",
     "db:status": "cross-env PRISMA_TARGET=production prisma migrate status"

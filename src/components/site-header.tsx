@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getStaffAccess } from "@/lib/admin/access";
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { countCartItems } from "@/lib/shop/cart";
@@ -15,6 +16,8 @@ export async function SiteHeader() {
   const user = await getCurrentUser();
   const cartId = await readCartId();
   const cartCount = cartId ? await countCartItems(cartId) : 0;
+  // Only asked for somebody signed in; a customer's answer is one empty lookup.
+  const isStaff = user ? (await getStaffAccess(user.id)) !== null : false;
 
   return (
     <header className="border-b border-neutral-200 dark:border-neutral-800">
@@ -27,6 +30,12 @@ export async function SiteHeader() {
           <Link href="/cart" className="underline-offset-4 hover:underline">
             Cart{cartCount > 0 && <span className="text-neutral-500"> ({cartCount})</span>}
           </Link>
+
+          {isStaff && (
+            <Link href="/admin" className="underline-offset-4 hover:underline">
+              Admin
+            </Link>
+          )}
 
           {user ? (
             <>

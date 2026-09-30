@@ -42,6 +42,15 @@ describe("the admin guard", () => {
     expect(read(file)).toMatch(GUARD);
   });
 
+  // Metadata is published even when the page answers 404, so a fixed title
+  // would name the page to the very people it is hidden from.
+  const pagesAndLayouts = adminFiles.filter((file) => /\/(page|layout)\.tsx$/.test(file));
+
+  it.each(pagesAndLayouts)("%s does not publish a fixed title", (file) => {
+    const fixed = /export const metadata[^=]*=\s*\{[^}]*\btitle\b/.exec(read(file));
+    expect(fixed?.[0], "use staffTitle() for admin page titles").toBeUndefined();
+  });
+
   // Server Actions are public POST endpoints. Every exported function in a
   // "use server" file is one, whether or not any form uses it.
   const actionFiles = adminFiles.filter((file) => /^\s*["']use server["']/.test(read(file)));
@@ -51,11 +60,12 @@ describe("the admin guard", () => {
       .split(/(?=^export async function )/m)
       .slice(1);
 
+    // requireStaff alone is for actions no permission governs, such as the
+    // sidebar preference. Anything that changes shop data needs a permission,
+    // which review — not this test — has to judge.
     for (const action of actions) {
       const name = /^export async function (\w+)/.exec(action)?.[1];
-      expect(action, `${name} does not call requirePermission`).toMatch(
-        /\bawait requirePermission\(/,
-      );
+      expect(action, `${name} does not check access`).toMatch(GUARD);
     }
   });
 });

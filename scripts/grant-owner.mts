@@ -42,6 +42,14 @@ const { host, pathname } = new URL(process.env.DATABASE_URL ?? "");
 console.info(`${production ? "PRODUCTION" : "local"} — ${pathname.slice(1)} at ${host}`);
 
 try {
+  // Open the connection before the transaction does. Prisma waits at most two
+  // seconds for a transaction's connection, and from Nairobi a fresh one to
+  // Neon in Frankfurt takes about 1.5s of handshakes — more when the database
+  // has been suspended for idling and has to wake first. Connected here, with
+  // no such limit, the transaction reuses the open connection and starts at
+  // once. The app never needs this: it runs in Frankfurt, beside the database.
+  await prisma.$queryRaw`SELECT 1`;
+
   const { granted } = await grantOwnerRole(email);
   console.info(granted ? `${email} is now an owner.` : `${email} was already an owner.`);
 } catch (error) {

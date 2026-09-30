@@ -1,6 +1,6 @@
 import type { Category, Condition, Gender } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 
 /**
  * Catalogue queries.

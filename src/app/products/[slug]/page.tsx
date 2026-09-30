@@ -5,11 +5,11 @@ import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/add-to-cart";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductStatus } from "@/generated/prisma/enums";
-import { CATEGORY_LABELS, CONDITION_LABELS, GENDER_LABELS } from "@/lib/catalogue";
+import { CATEGORY_LABELS, CONDITION_LABELS, GENDER_LABELS } from "@/lib/shop/catalogue";
 import { formatPrice } from "@/lib/money";
-import { readCart } from "@/lib/cart-session";
-import { buildProductQuery } from "@/lib/product-search-params";
-import { getProductBySlug } from "@/lib/products";
+import { readCart } from "@/lib/shop/cart-session";
+import { buildProductQuery } from "@/lib/shop/product-search-params";
+import { getProductBySlug } from "@/lib/shop/products";
 
 export async function generateMetadata({
   params,

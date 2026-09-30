@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "./auth/current-user";
+import { getCurrentUser } from "../auth/current-user";
 import { clearCart } from "./cart";
 import { readCartId } from "./cart-session";
 import { claimPayment } from "./orders";
-import { normalisePhone } from "./phone";
-import { prisma } from "./prisma";
+import { normalisePhone } from "../phone";
+import { prisma } from "../prisma";
 
 /**
  * The buyer telling us they have paid.

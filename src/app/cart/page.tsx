@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
-import type { CartLine } from "@/lib/cart";
-import { removeFromCartAction } from "@/lib/cart-actions";
-import { readCart } from "@/lib/cart-session";
+import type { CartLine } from "@/lib/shop/cart";
+import { removeFromCartAction } from "@/lib/shop/cart-actions";
+import { readCart } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {

@@ -6,17 +6,17 @@ import { ContactForm } from "@/components/contact-form";
 import { PaymentClaimForm } from "@/components/payment-claim-form";
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
-import { readCartId } from "@/lib/cart-session";
+import { readCartId } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
-import { beginCheckout } from "@/lib/orders";
+import { beginCheckout } from "@/lib/shop/orders";
 import { prisma } from "@/lib/prisma";
 import {
   PAYMENT_INSTRUCTIONS,
   PAYMENT_NUMBER_LABELS,
   type PaymentDetails,
   getPaymentDetails,
-} from "@/lib/shop-settings";
-import { RESERVATION_MINUTES } from "@/lib/reservations";
+} from "@/lib/shop/settings";
+import { RESERVATION_MINUTES } from "@/lib/shop/reservations";
 
 export const metadata: Metadata = {
   title: "Checkout",

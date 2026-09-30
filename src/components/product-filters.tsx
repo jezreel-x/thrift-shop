@@ -9,9 +9,9 @@ import {
   GENDERS,
   GENDER_LABELS,
   allSizes,
-} from "@/lib/catalogue";
-import { PARAM, SORTS, SORT_LABELS, hasActiveFilters } from "@/lib/product-search-params";
-import type { ProductQuery } from "@/lib/product-search-params";
+} from "@/lib/shop/catalogue";
+import { PARAM, SORTS, SORT_LABELS, hasActiveFilters } from "@/lib/shop/product-search-params";
+import type { ProductQuery } from "@/lib/shop/product-search-params";
 
 /**
  * The catalogue's filters, as an ordinary GET form.

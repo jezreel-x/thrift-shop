@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Category, Condition, Gender, ProductStatus } from "../src/generated/prisma/enums";
-import { isValidSize } from "../src/lib/catalogue";
+import { isValidSize } from "../src/lib/shop/catalogue";
 import { prisma } from "../src/lib/prisma";
 
 /**

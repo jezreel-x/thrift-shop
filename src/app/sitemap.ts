@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { listSitemapEntries } from "@/lib/products";
+import { listSitemapEntries } from "@/lib/shop/products";
 import { siteUrl } from "@/lib/site";
 
 /**

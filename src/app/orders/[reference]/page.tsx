@@ -7,7 +7,7 @@ import { OrderBadge } from "@/components/order-badge";
 import { OrderStatus } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatPrice } from "@/lib/money";
-import { getOrder } from "@/lib/orders";
+import { getOrder } from "@/lib/shop/orders";
 
 export const metadata: Metadata = {
   title: "Order",

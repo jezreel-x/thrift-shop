@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { buildProductQuery } from "@/lib/product-search-params";
-import type { ProductQuery } from "@/lib/product-search-params";
+import { buildProductQuery } from "@/lib/shop/product-search-params";
+import type { ProductQuery } from "@/lib/shop/product-search-params";
 
 /**
  * Numbered pages rather than infinite scroll.

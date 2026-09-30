@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { type ClaimFormState, claimPaymentAction } from "@/lib/checkout-actions";
+import { type ClaimFormState, claimPaymentAction } from "@/lib/shop/checkout-actions";
 
 /**
  * Where the buyer types the M-Pesa code from their confirmation SMS.

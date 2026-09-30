@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 
 import { OrderStatus } from "@/generated/prisma/enums";
 import { getCartContents } from "./cart";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 import { confirmSale, forceRelease, holdForPaymentReview, reserveProduct } from "./reservations";
 
 /**

@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { CART_COOKIE, mergeAnonymousCart } from "../cart";
+import { CART_COOKIE, mergeAnonymousCart } from "../shop/cart";
 import { prisma } from "../prisma";
 import { safeReturnTo } from "./current-user";
 import {

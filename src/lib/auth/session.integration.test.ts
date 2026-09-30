@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { Role } from "@/generated/prisma/enums";
 import { db } from "@/test/db";
 import { hashPassword } from "./password";
 import {
@@ -36,7 +35,7 @@ describe("createSession", () => {
     expect(await readSession(token)).toMatchObject({
       id: user.id,
       email: "grace@example.com",
-      role: Role.CUSTOMER,
+      name: "Grace",
     });
   });
 
@@ -130,18 +129,18 @@ describe("readSession", () => {
     expect(daysLeft).toBeGreaterThan(SESSION_DAYS - 0.01);
   });
 
-  it("carries the role, which is what the admin area will gate on", async () => {
-    const owner = await db.user.create({
-      data: {
-        email: "owner@example.com",
-        passwordHash: await hashPassword("a good passphrase"),
-        role: Role.OWNER,
-      },
-    });
+  it("carries identity only — permissions are read fresh by the admin guard", async () => {
+    // If the session carried permissions, a revoked role would linger until the
+    // session was reissued — up to a week.
+    const user = await makeUser();
+    const { token } = await createSession(user.id);
 
-    const { token } = await createSession(owner.id);
-
-    expect((await readSession(token))?.role).toBe(Role.OWNER);
+    expect(Object.keys((await readSession(token)) ?? {}).sort()).toEqual([
+      "email",
+      "id",
+      "name",
+      "phone",
+    ]);
   });
 
   it("never returns the password hash", async () => {

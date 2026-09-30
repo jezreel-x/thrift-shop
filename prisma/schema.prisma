@@ -218,16 +218,6 @@ model ProductStatusHistory {
 
 // ----------------------------- Accounts -----------------------------
 
-// Who someone is to the shop.
-//
-// Two values, because the shop has two kinds of people: the person buying and
-// the person who owns the stock. Phase 3's admin area gates on OWNER. Anything
-// finer — staff, a second seller — can be added when somebody actually needs it.
-enum Role {
-  CUSTOMER
-  OWNER
-}
-
 model User {
   id String @id @default(cuid())
 
@@ -249,11 +239,14 @@ model User {
   // purchase gets abandoned.
   phone String?
 
-  role Role @default(CUSTOMER)
+  // Everyone is a customer. Being staff means holding at least one StaffRole;
+  // there is no flag to set, so there is no flag to forget to unset.
+  staffRoles StaffRoleAssignment[]
 
-  sessions Session[]
-  cart     Cart?
-  orders   Order[]
+  sessions  Session[]
+  cart      Cart?
+  orders    Order[]
+  auditLogs AuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -482,4 +475,111 @@ enum PaymentMethod {
   PAYBILL
   // Pochi la Biashara — pays a phone number.
   POCHI
+}
+
+// ------------------------- Staff and access -------------------------
+
+// What a member of staff may do.
+//
+// Defined in code, because only code can enforce a permission: adding one to a
+// table without a check that reads it would grant nothing. Roles, by contrast,
+// are rows, so the owner can reshape who does what without a deploy.
+//
+// Named for operations, not screens. JaGedo attaches its permissions to admin
+// menu items, which couples the security model to the navigation — rename or
+// split a menu and the permissions move with it. An operation is what the code
+// actually checks before it changes something.
+enum Permission {
+  // Orders
+  ORDERS_VIEW
+  ORDERS_CONFIRM_PAYMENT
+  ORDERS_FULFIL
+  // Products
+  PRODUCTS_VIEW
+  PRODUCTS_EDIT
+  PRODUCTS_MARK_SOLD
+  PRODUCTS_HOLD
+  // People
+  CUSTOMERS_VIEW
+  STAFF_MANAGE
+  // The shop
+  SETTINGS_EDIT
+  AUDIT_VIEW
+}
+
+model StaffRole {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  // Holds every permission, including ones added after the role was created.
+  // Without this, adding a permission to the enum would lock the owner out of
+  // the new feature until somebody remembered to grant it to her.
+  isSuperAdmin Boolean @default(false)
+
+  permissions StaffRolePermission[]
+  assignments StaffRoleAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StaffRolePermission {
+  roleId     String
+  role       StaffRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission
+
+  @@id([roleId, permission])
+}
+
+// Who holds which role.
+//
+// Revoking deletes the row rather than flipping an isActive flag as JaGedo
+// does. The audit log already records that the role was held and when it was
+// taken away, and a flag is one more condition every access check must
+// remember to apply.
+model StaffRoleAssignment {
+  userId String
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   StaffRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+// ---------------------------- Audit log -----------------------------
+
+// Every change made from the admin area, with what it was before and after.
+//
+// The questions this answers arrive after something has gone wrong: who
+// changed the till number, who confirmed that payment, who gave this person
+// access. They are unanswerable from the current state of the database alone.
+//
+// Append-only by convention: nothing in the application updates or deletes a
+// row here.
+model AuditLog {
+  id String @id @default(cuid())
+
+  // Null when the change came from a script rather than a person signed in —
+  // bootstrapping the first owner, for instance.
+  actorId String?
+  // SetNull, so deleting a user keeps the record of what they did.
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  // "order.confirm-payment", "staff.grant-role", "settings.update-payment".
+  action     String
+  entityType String
+  entityId   String
+
+  before Json?
+  after  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
 }

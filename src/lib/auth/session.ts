@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Role } from "@/generated/prisma/enums";
 import { prisma } from "../prisma";
 
 /**
@@ -34,13 +33,20 @@ const MS_PER_DAY = 86_400_000;
  */
 const RENEW_AFTER = 0.5;
 
+/**
+ * Who is signed in — identity only.
+ *
+ * What they are allowed to do is deliberately not here. Permissions are read
+ * fresh by the admin guard on every admin request (src/lib/admin/access.ts), so
+ * revoking a role takes effect on the very next click rather than whenever the
+ * session happens to be reissued, and shop pages never pay for the join.
+ */
 export type SessionUser = {
   id: string;
   email: string;
   name: string | null;
   /** Canonical 254XXXXXXXXX, or null until checkout has asked for it. */
   phone: string | null;
-  role: Role;
 };
 
 export type SessionRequestInfo = {
@@ -104,7 +110,7 @@ export async function readSession(token: string | undefined): Promise<SessionUse
     select: {
       expiresAt: true,
       createdAt: true,
-      user: { select: { id: true, email: true, name: true, phone: true, role: true } },
+      user: { select: { id: true, email: true, name: true, phone: true } },
     },
   });
 

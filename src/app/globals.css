@@ -1,22 +1,85 @@
 @import "tailwindcss";
 
+/*
+ * Themes.
+ *
+ * Three states, not two: light, dark, and — when nobody has chosen — whatever
+ * the device is set to. The choice lives in a cookie so the server can render
+ * it into the first HTML as <html data-theme="…">; a choice kept in browser
+ * storage would only be applied after the page had loaded, flashing the wrong
+ * theme first. With no attribute, the media query below decides, and keeps
+ * deciding: a phone that switches to dark at sunset takes the site with it.
+ */
+
+/*
+ * `dark:` means "the chosen theme is dark, or nothing is chosen and the device
+ * is dark". Tailwind's default reads only the device, which would make every
+ * existing dark: class ignore the switch.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/*
+ * Colour tokens. Components name a role — surface, muted, border — rather than
+ * a colour, so a theme is only a different set of values here and no component
+ * needs to know which one is active.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --surface: #ffffff;
+  --surface-muted: #f5f5f5;
+  --muted: #737373;
+  --border: #e5e5e5;
+  /* Native controls and scrollbars follow the theme too. */
+  color-scheme: light;
+}
+
+/*
+ * The dark values appear twice, and must stay identical: once for an explicit
+ * choice, once for "not chosen, device is dark". CSS cannot put a media query
+ * and a plain selector in one rule.
+ */
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --surface: #141414;
+  --surface-muted: #1c1c1c;
+  --muted: #a3a3a3;
+  --border: #262626;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --surface: #141414;
+    --surface-muted: #1c1c1c;
+    --muted: #a3a3a3;
+    --border: #262626;
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

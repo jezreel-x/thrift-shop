@@ -5,6 +5,7 @@ import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { countCartItems } from "@/lib/shop/cart";
 import { readCartId } from "@/lib/shop/cart-session";
+import { ThemeSwitcher } from "./theme-switcher";
 
 /**
  * The shop's one piece of persistent navigation.
@@ -27,6 +28,8 @@ export async function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-4 text-sm">
+          <ThemeSwitcher />
+
           <Link href="/cart" className="underline-offset-4 hover:underline">
             Cart{cartCount > 0 && <span className="text-neutral-500"> ({cartCount})</span>}
           </Link>

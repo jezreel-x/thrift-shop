@@ -2,11 +2,14 @@ import { LogOut, PanelLeftClose, PanelLeftOpen, Store } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Permission } from "@/generated/prisma/enums";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { MobileDrawer } from "@/components/admin/mobile-drawer";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { getStaffAccess } from "@/lib/admin/access";
 import { adminNavFor } from "@/lib/admin/navigation";
+import { countOrdersToConfirm } from "@/lib/admin/orders";
+import { can } from "@/lib/admin/permissions";
 import { isSidebarCollapsed } from "@/lib/admin/sidebar";
 import { setSidebarAction } from "@/lib/admin/sidebar-actions";
 import { signOutAction } from "@/lib/auth/actions";
@@ -37,7 +40,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     return <div className="flex flex-1 flex-col">{children}</div>;
   }
 
-  const sections = adminNavFor(access);
+  // A hint, not a live counter: the layout keeps its render while moving
+  // between admin pages, so the number refreshes after a decision (which
+  // re-renders everything) or a reload, not on every click.
+  const toConfirm = can(access, Permission.ORDERS_VIEW) ? await countOrdersToConfirm() : 0;
+  const sections = adminNavFor(access, { orders: toConfirm });
   const collapsed = await isSidebarCollapsed();
 
   return (

@@ -20,6 +20,8 @@ export type NavItem = {
   icon: NavIcon;
   /** False until the screen exists; drawn as "soon" rather than as a link to a 404. */
   ready: boolean;
+  /** Something waiting on this screen, such as payments to confirm. */
+  count?: number;
 };
 
 export type NavSection = { title: string; items: NavItem[] };
@@ -41,7 +43,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         label: "Orders",
         icon: "orders",
         permission: Permission.ORDERS_VIEW,
-        ready: false,
+        ready: true,
       },
       {
         href: "/admin/products",
@@ -80,13 +82,28 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
   },
 ];
 
-/** The menu this person may see, with empty sections dropped. */
-export function adminNavFor(access: StaffAccess): NavSection[] {
+/**
+ * The menu this person may see, with empty sections dropped.
+ *
+ * `counts` puts a number beside an item: the payments waiting to be confirmed
+ * beside Orders. Only for items the person can see, so the menu never reveals
+ * how much is waiting on a screen they cannot open.
+ */
+export function adminNavFor(
+  access: StaffAccess,
+  counts: Partial<Record<NavIcon, number>> = {},
+): NavSection[] {
   return ADMIN_NAV.map((section) => ({
     title: section.title,
     items: section.items
       .filter((item) => item.permission === null || can(access, item.permission))
-      .map(({ href, label, icon, ready }) => ({ href, label, icon, ready })),
+      .map(({ href, label, icon, ready }) => ({
+        href,
+        label,
+        icon,
+        ready,
+        ...(counts[icon] ? { count: counts[icon] } : {}),
+      })),
   })).filter((section) => section.items.length > 0);
 }
 

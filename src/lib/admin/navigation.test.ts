@@ -56,3 +56,23 @@ describe("isActive", () => {
     expect(isActive("/admin/staff", "/admin/staffing")).toBe(false);
   });
 });
+
+describe("adminNavFor counts", () => {
+  it("puts the waiting count beside Orders for someone who can see orders", () => {
+    const owner = resolveAccess("u1", [{ name: "Owner", isSuperAdmin: true, permissions: [] }]);
+    const orders = adminNavFor(owner!, { orders: 3 })
+      .flatMap((section) => section.items)
+      .find((item) => item.label === "Orders");
+
+    expect(orders?.count).toBe(3);
+  });
+
+  it("leaves the count off when nothing is waiting", () => {
+    const owner = resolveAccess("u1", [{ name: "Owner", isSuperAdmin: true, permissions: [] }]);
+    const orders = adminNavFor(owner!, { orders: 0 })
+      .flatMap((section) => section.items)
+      .find((item) => item.label === "Orders");
+
+    expect(orders).not.toHaveProperty("count");
+  });
+});

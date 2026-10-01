@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/site";
 import { getStoredTheme } from "@/lib/theme/current-theme";
 import "./globals.css";
@@ -43,10 +42,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       data-theme={theme ?? undefined}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
-        <SiteHeader />
-        {children}
-      </body>
+      {/*
+        No header here: the shop and the admin area each bring their own, from
+        app/(shop)/layout.tsx and app/admin/layout.tsx.
+      */}
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

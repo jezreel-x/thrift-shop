@@ -6,7 +6,7 @@ import {
   PAYMENT_REVIEW_HOURS,
   RESERVATION_MINUTES,
   confirmSale,
-  forceRelease,
+  releaseHoldIn,
   holdForPaymentReview,
   releaseExpiredReservations,
   releaseReservation,
@@ -379,24 +379,31 @@ describe("holdForPaymentReview", () => {
   });
 });
 
-describe("forceRelease", () => {
-  it("returns an item when the owner rejects the payment", async () => {
+describe("releaseHoldIn", () => {
+  const release = (productId: string, holder: string, reason: string) =>
+    db.$transaction((tx) => releaseHoldIn(tx, productId, holder, reason));
+
+  it("returns an item when its holder's payment is rejected, even after the hold lapsed", async () => {
+    // Lapsed but not yet swept is still this holder's, and still theirs to give back.
     const product = await makeProduct();
     await reserveProduct(product.id, "buyer");
-    await holdForPaymentReview(product.id, "buyer");
+    await db.product.update({
+      where: { id: product.id },
+      data: { reservedUntil: new Date(Date.now() - 1000) },
+    });
 
-    expect(await forceRelease(product.id, "payment rejected")).toBe(true);
+    expect(await release(product.id, "buyer", "payment rejected")).toBe(true);
 
     const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
     expect(stored.status).toBe(ProductStatus.AVAILABLE);
     expect(stored.reservedBy).toBeNull();
   });
 
-  it("records the reason, since overriding a buyer's hold needs explaining", async () => {
+  it("records the reason, since releasing a buyer's hold needs explaining", async () => {
     const product = await makeProduct();
     await reserveProduct(product.id, "buyer");
 
-    await forceRelease(product.id, "payment rejected: code already used");
+    await release(product.id, "buyer", "payment rejected: code already used");
 
     const history = await db.productStatusHistory.findFirst({
       where: { productId: product.id, toStatus: ProductStatus.AVAILABLE },
@@ -404,10 +411,20 @@ describe("forceRelease", () => {
     expect(history?.reason).toBe("payment rejected: code already used");
   });
 
+  it("will not release somebody else's hold", async () => {
+    const product = await makeProduct();
+    await reserveProduct(product.id, "second-buyer");
+
+    expect(await release(product.id, "first-buyer", "payment rejected")).toBe(false);
+
+    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
+    expect(stored.reservedBy).toBe("second-buyer");
+  });
+
   it("will not resurrect a sold item", async () => {
     const product = await makeProduct({ status: ProductStatus.SOLD });
 
-    expect(await forceRelease(product.id, "mistake")).toBe(false);
+    expect(await release(product.id, "buyer", "mistake")).toBe(false);
   });
 });
 

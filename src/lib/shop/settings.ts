@@ -34,42 +34,24 @@ export async function getPaymentDetails(): Promise<PaymentDetails | null> {
   // Both are required for anyone to actually send money.
   if (!settings?.payment || !settings.tillNumber) return null;
 
+  // So is the name. Checkout tells the buyer which name M-Pesa will show and
+  // to stop if it shows any other; a guessed name would teach them to ignore
+  // the one check that catches a copycat page with someone else's till.
+  if (!settings.paymentName) return null;
+
   // A paybill without an account number cannot be paid either.
   if (settings.payment === PaymentMethod.PAYBILL && !settings.accountNumber) return null;
 
   return {
     method: settings.payment,
-    name: settings.paymentName ?? "The Thrift Plug",
+    name: settings.paymentName,
     number: settings.tillNumber,
     accountNumber: settings.accountNumber,
     note: settings.paymentNote,
   };
 }
 
-/** Creates the row if it is missing, so the Phase 3 form always has one to edit. */
-export async function updatePaymentDetails(input: {
-  method: PaymentMethod | null;
-  name?: string | null;
-  number?: string | null;
-  accountNumber?: string | null;
-  note?: string | null;
-}): Promise<void> {
-  const data = {
-    payment: input.method,
-    paymentName: input.name ?? null,
-    tillNumber: input.number ?? null,
-    // Only a paybill has one; keeping a stale value would show an account
-    // number beside a till, which is how a payment goes astray.
-    accountNumber: input.method === PaymentMethod.PAYBILL ? (input.accountNumber ?? null) : null,
-    paymentNote: input.note ?? null,
-  };
-
-  await prisma.shopSettings.upsert({
-    where: { id: SINGLETON },
-    create: { id: SINGLETON, ...data },
-    update: data,
-  });
-}
+// Saving is staff's job, audited: see src/lib/admin/payment-settings.ts.
 
 /** How the buyer is told to pay, in the words M-Pesa uses on the handset. */
 export const PAYMENT_INSTRUCTIONS: Record<PaymentMethod, string> = {
@@ -81,5 +63,5 @@ export const PAYMENT_INSTRUCTIONS: Record<PaymentMethod, string> = {
 export const PAYMENT_NUMBER_LABELS: Record<PaymentMethod, string> = {
   [PaymentMethod.TILL]: "Till number",
   [PaymentMethod.PAYBILL]: "Business number",
-  [PaymentMethod.POCHI]: "Phone number",
+  [PaymentMethod.POCHI]: "Send to number",
 };

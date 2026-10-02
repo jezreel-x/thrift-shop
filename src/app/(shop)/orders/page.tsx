@@ -32,7 +32,13 @@ export default async function OrdersPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">Your orders</h1>
+      <Link
+        href="/"
+        className="text-sm text-neutral-500 underline-offset-4 hover:underline dark:text-neutral-400"
+      >
+        ← Back to the shop
+      </Link>
+      <h1 className="mt-6 text-2xl font-semibold tracking-tight">Your orders</h1>
 
       <ul className="mt-8 space-y-3">
         {orders.map((order) => (

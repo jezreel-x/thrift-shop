@@ -25,12 +25,17 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
-      <Link
-        href="/orders"
-        className="text-sm text-neutral-500 underline-offset-4 hover:underline dark:text-neutral-400"
+      <nav
+        aria-label="Back"
+        className="flex items-baseline justify-between gap-4 text-sm text-neutral-500 dark:text-neutral-400"
       >
-        ← Your orders
-      </Link>
+        <Link href="/" className="underline-offset-4 hover:underline">
+          ← Back to the shop
+        </Link>
+        <Link href="/orders" className="underline-offset-4 hover:underline">
+          All your orders
+        </Link>
+      </nav>
 
       <div className="mt-6 flex items-baseline justify-between gap-4">
         <h1 className="font-mono text-2xl font-semibold tracking-tight">{order.reference}</h1>

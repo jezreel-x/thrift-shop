@@ -1,8 +1,9 @@
-import { LogOut, PanelLeftClose, PanelLeftOpen, Store } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Store } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Permission } from "@/generated/prisma/enums";
+import { AccountMenu } from "@/components/account-menu";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { MobileDrawer } from "@/components/admin/mobile-drawer";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -12,7 +13,6 @@ import { countOrdersToConfirm } from "@/lib/admin/orders";
 import { can } from "@/lib/admin/permissions";
 import { isSidebarCollapsed } from "@/lib/admin/sidebar";
 import { setSidebarAction } from "@/lib/admin/sidebar-actions";
-import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
 // Robots only. A title here would be published to customers answered with a
@@ -105,17 +105,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
               <span className="hidden sm:inline">View shop</span>
             </Link>
             <ThemeSwitcher />
-            <span className="hidden text-muted md:inline">{user.name ?? user.email}</span>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                aria-label="Sign out"
-                title="Sign out"
-                className="rounded-md p-1.5 text-muted transition hover:bg-surface-muted hover:text-foreground"
-              >
-                <LogOut aria-hidden className="size-4" />
-              </button>
-            </form>
+            <AccountMenu name={user.name} email={user.email} />
           </div>
         </header>
 

@@ -132,12 +132,12 @@ export async function claimPayment(
   orderId: string,
   userId: string,
   mpesaCode: string,
-): Promise<{ ok: true } | { ok: false; reason: ClaimRefusal }> {
+): Promise<{ ok: true; reference: string } | { ok: false; reason: ClaimRefusal }> {
   const code = mpesaCode.trim().toUpperCase();
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
-    select: { id: true, status: true, items: { select: { productId: true } } },
+    select: { id: true, reference: true, status: true, items: { select: { productId: true } } },
   });
 
   if (!order) return { ok: false, reason: "not-found" };
@@ -164,7 +164,7 @@ export async function claimPayment(
     return { ok: false, reason: "code-already-used" };
   }
 
-  return { ok: true };
+  return { ok: true, reference: order.reference };
 }
 
 /** One order, scoped to its buyer so a reference cannot be guessed into. */
@@ -178,6 +178,20 @@ export async function getOrder(reference: string, userId: string) {
         },
       },
     },
+  });
+}
+
+/**
+ * A buyer's orders waiting for the shop to check their payment, newest first.
+ *
+ * For the reminder under the shop header: somebody who has sent money and
+ * wandered back to the catalogue should not have to remember where to look.
+ */
+export async function listOrdersBeingChecked(userId: string) {
+  return prisma.order.findMany({
+    where: { userId, status: OrderStatus.PENDING_CONFIRMATION },
+    orderBy: { claimedAt: "desc" },
+    select: { reference: true },
   });
 }
 

@@ -69,7 +69,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         label: "Settings",
         icon: "settings",
         permission: Permission.SETTINGS_EDIT,
-        ready: false,
+        ready: true,
       },
       {
         href: "/admin/staff",

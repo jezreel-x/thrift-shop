@@ -4,7 +4,7 @@ import { Category, Condition, Gender, OrderStatus, ProductStatus } from "@/gener
 import { hashPassword } from "@/lib/auth/password";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { addToCart, resolveCart } from "./cart";
-import { beginCheckout, claimPayment, getOrder } from "./orders";
+import { beginCheckout, claimPayment, getOrder, listOrdersBeingChecked } from "./orders";
 import { releaseExpiredReservations, reserveProduct } from "./reservations";
 
 cleanDatabaseBetweenTests();
@@ -205,7 +205,7 @@ describe("claimPayment", () => {
   it("records the code and moves the order to pending confirmation", async () => {
     const { user, orderId } = await orderReadyToPay();
 
-    expect(await claimPayment(orderId, user.id, "sgh7xkl2m9")).toEqual({ ok: true });
+    expect(await claimPayment(orderId, user.id, "sgh7xkl2m9")).toMatchObject({ ok: true });
 
     const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.PENDING_CONFIRMATION);
@@ -232,7 +232,9 @@ describe("claimPayment", () => {
     const grace = await orderReadyToPay("grace@example.com");
     const brian = await orderReadyToPay("brian@example.com");
 
-    expect(await claimPayment(grace.orderId, grace.user.id, "SGH7XKL2M9")).toEqual({ ok: true });
+    expect(await claimPayment(grace.orderId, grace.user.id, "SGH7XKL2M9")).toMatchObject({
+      ok: true,
+    });
     expect(await claimPayment(brian.orderId, brian.user.id, "SGH7XKL2M9")).toEqual({
       ok: false,
       reason: "code-already-used",
@@ -300,5 +302,31 @@ describe("getOrder", () => {
     const stranger = await makeUser("brian@example.com");
 
     expect(await getOrder(result.reference, stranger.id)).toBeNull();
+  });
+});
+
+describe("listOrdersBeingChecked", () => {
+  it("lists only this buyer's orders whose payment is waiting to be checked", async () => {
+    const grace = await shopperWith([await makeProduct()]);
+    const unpaid = await shopperWith([await makeProduct()], "unpaid@example.com");
+    const other = await shopperWith([await makeProduct()], "other@example.com");
+
+    const graceOrder = await beginCheckout(grace.user.id, grace.cartId, BUYER);
+    const unpaidOrder = await beginCheckout(unpaid.user.id, unpaid.cartId, BUYER);
+    const otherOrder = await beginCheckout(other.user.id, other.cartId, BUYER);
+    if (!graceOrder.ok || !unpaidOrder.ok || !otherOrder.ok) throw new Error("setup");
+
+    // The claim hands back the reference, so the buyer can be sent straight to it.
+    expect(await claimPayment(graceOrder.orderId, grace.user.id, "SGH7XKL2M9")).toEqual({
+      ok: true,
+      reference: graceOrder.reference,
+    });
+    await claimPayment(otherOrder.orderId, other.user.id, "SGH7XKL2M8");
+
+    expect(await listOrdersBeingChecked(grace.user.id)).toEqual([
+      { reference: graceOrder.reference },
+    ]);
+    // Not yet paid: nothing for the shop to check, so no reminder.
+    expect(await listOrdersBeingChecked(unpaid.user.id)).toEqual([]);
   });
 });

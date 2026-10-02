@@ -38,7 +38,7 @@ export async function ThemeSwitcher() {
           aria-pressed={current === theme}
           aria-label={label}
           title={label}
-          className="rounded-md p-1.5 text-muted transition hover:text-foreground aria-pressed:bg-surface-muted aria-pressed:text-foreground"
+          className="rounded-md p-1 text-muted sm:p-1.5 transition hover:text-foreground aria-pressed:bg-surface-muted aria-pressed:text-foreground"
         >
           <Icon aria-hidden className="size-4" />
         </button>

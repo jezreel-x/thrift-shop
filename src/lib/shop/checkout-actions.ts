@@ -54,7 +54,9 @@ export async function claimPaymentAction(
   if (cartId) await clearCart(cartId);
 
   revalidatePath("/", "layout");
-  redirect("/orders");
+  // Straight to this order, not the list: the next thing the buyer wants to
+  // know is what happens to the money they just sent.
+  redirect(`/orders/${result.reference}`);
 }
 
 function explain(reason: string): string {

@@ -8,6 +8,7 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { readCartId } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
+import { formatPhone } from "@/lib/phone";
 import { beginCheckout } from "@/lib/shop/orders";
 import { prisma } from "@/lib/prisma";
 import {
@@ -159,12 +160,24 @@ function PaymentInstructions({
       </p>
 
       <dl className="mt-4 space-y-3 text-sm">
-        <Row label={PAYMENT_NUMBER_LABELS[payment.method]} value={payment.number} />
+        <Row
+          label={PAYMENT_NUMBER_LABELS[payment.method]}
+          value={
+            payment.method === PaymentMethod.POCHI ? formatPhone(payment.number) : payment.number
+          }
+        />
         {payment.accountNumber && <Row label="Account number" value={payment.accountNumber} />}
-        {payment.method === PaymentMethod.PAYBILL ? null : (
-          <Row label="Paying" value={payment.name} />
-        )}
+        <Row label="M-Pesa will show" value={payment.name} />
       </dl>
+
+      {/*
+        The one check a buyer can do themselves. A copycat page can copy the
+        photos and prices, but not the name registered to the till.
+      */}
+      <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        Before you enter your PIN, M-Pesa shows the name you are paying. If it is not{" "}
+        <span className="font-semibold">{payment.name}</span>, stop and contact us.
+      </p>
 
       <p className="mt-4 border-t border-neutral-200 pt-3 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
         Quote <span className="font-mono font-medium">{reference}</span> if you message about this

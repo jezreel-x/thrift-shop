@@ -473,7 +473,9 @@ enum PaymentMethod {
   TILL
   // Paybill, which also needs an account number.
   PAYBILL
-  // Pochi la Biashara — pays a phone number.
+  // Send Money to a phone number: Pochi la Biashara or a personal line. The
+  // buyer's steps and the name check are the same either way; only where the
+  // money lands differs, so one value covers both. Named POCHI for history.
   POCHI
 }
 

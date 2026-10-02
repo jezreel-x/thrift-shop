@@ -21,13 +21,21 @@ import { can } from "./permissions";
  * memoised: Server Actions re-render within the request that signed somebody
  * in or out, and a cached answer to "who is this?" would be stale exactly then.
  */
-export function staffTitle(title: string, permission?: Permission) {
-  return async function generateMetadata(): Promise<Metadata> {
+export function staffTitle<Props>(
+  title: string | ((props: Props) => Promise<string>),
+  permission?: Permission,
+) {
+  return async function generateMetadata(props: Props): Promise<Metadata> {
     const user = await getCurrentUser();
     const access = user ? await getStaffAccess(user.id) : null;
 
     const allowed = access !== null && (permission === undefined || can(access, permission));
+    if (!allowed) return {};
 
-    return allowed ? { title: { absolute: `${title} · Admin | The Thrift Plug` } } : {};
+    // Only worked out for somebody allowed to see it: a title built from the
+    // URL — "Order TP-7K3M9Q" — would otherwise confirm the order exists.
+    const text = typeof title === "string" ? title : await title(props);
+
+    return { title: { absolute: `${text} · Admin | The Thrift Plug` } };
   };
 }

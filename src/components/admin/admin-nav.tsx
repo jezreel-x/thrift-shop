@@ -71,8 +71,29 @@ export function AdminNav({
                           : "text-muted hover:bg-surface-muted hover:text-foreground"
                       }`}
                     >
-                      <Icon aria-hidden className="size-4 shrink-0" />
-                      <span className={collapsed ? "sr-only" : ""}>{item.label}</span>
+                      <span className="relative">
+                        <Icon aria-hidden className="size-4 shrink-0" />
+                        {collapsed && item.count ? (
+                          <span
+                            aria-hidden
+                            className="absolute -top-1 -right-1 size-2 rounded-full bg-blue-600"
+                          />
+                        ) : null}
+                      </span>
+                      <span className={collapsed ? "sr-only" : "flex-1"}>
+                        {item.label}
+                        {item.count ? (
+                          <span className="sr-only"> ({item.count} waiting)</span>
+                        ) : null}
+                      </span>
+                      {!collapsed && item.count ? (
+                        <span
+                          aria-hidden
+                          className="rounded-full bg-blue-600 px-1.5 text-[11px] font-medium text-white tabular-nums"
+                        >
+                          {item.count}
+                        </span>
+                      ) : null}
                     </Link>
                   ) : (
                     // Not a link: the screen does not exist yet, and a link to

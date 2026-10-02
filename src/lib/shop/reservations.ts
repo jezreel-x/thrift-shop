@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { ProductStatus } from "@/generated/prisma/enums";
 import { prisma } from "../prisma";
 
@@ -125,25 +126,42 @@ export async function reserveProduct(
  * did not hold it, which is also what an already-expired hold looks like.
  */
 export async function releaseReservation(productId: string, holder: string): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const released = await tx.product.updateMany({
-      where: { id: productId, status: ProductStatus.RESERVED, reservedBy: holder },
-      data: { status: ProductStatus.AVAILABLE, reservedUntil: null, reservedBy: null },
-    });
+  return prisma.$transaction((tx) => releaseHoldIn(tx, productId, holder, "checkout abandoned"));
+}
 
-    if (released.count === 0) return false;
-
-    await tx.productStatusHistory.create({
-      data: {
-        productId,
-        fromStatus: ProductStatus.RESERVED,
-        toStatus: ProductStatus.AVAILABLE,
-        reason: "checkout abandoned",
-      },
-    });
-
-    return true;
+/**
+ * Releases `holder`'s hold on an item, inside the caller's transaction.
+ *
+ * Whether the hold is still live or has lapsed without being swept yet, it is
+ * released — but only if it is still this holder's. That condition is the whole
+ * point. Rejecting an old order must never touch an item somebody else has
+ * since reserved: after a lapse and a sweep, the same jacket can be another
+ * buyer's, and releasing "whatever hold is on it" would hand their item back to
+ * the rail while they are paying for it.
+ */
+export async function releaseHoldIn(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  holder: string,
+  reason: string,
+): Promise<boolean> {
+  const released = await tx.product.updateMany({
+    where: { id: productId, status: ProductStatus.RESERVED, reservedBy: holder },
+    data: { status: ProductStatus.AVAILABLE, reservedUntil: null, reservedBy: null },
   });
+
+  if (released.count === 0) return false;
+
+  await tx.productStatusHistory.create({
+    data: {
+      productId,
+      fromStatus: ProductStatus.RESERVED,
+      toStatus: ProductStatus.AVAILABLE,
+      reason,
+    },
+  });
+
+  return true;
 }
 
 /**
@@ -178,37 +196,6 @@ export async function holdForPaymentReview(
 }
 
 /**
- * Releases a hold regardless of who owns it.
- *
- * For the owner rejecting a claimed payment: she is not the holder, so the
- * holder-scoped release cannot serve, and making her wait out a 24-hour window
- * would keep a saleable item off the rail for a day. Takes a reason because an
- * administrator overriding a buyer's hold is exactly the kind of thing that
- * needs explaining later.
- */
-export async function forceRelease(productId: string, reason: string): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const released = await tx.product.updateMany({
-      where: { id: productId, status: ProductStatus.RESERVED },
-      data: { status: ProductStatus.AVAILABLE, reservedUntil: null, reservedBy: null },
-    });
-
-    if (released.count === 0) return false;
-
-    await tx.productStatusHistory.create({
-      data: {
-        productId,
-        fromStatus: ProductStatus.RESERVED,
-        toStatus: ProductStatus.AVAILABLE,
-        reason,
-      },
-    });
-
-    return true;
-  });
-}
-
-/**
  * Completes the sale, once payment has been confirmed.
  *
  * Requires a live hold belonging to this holder. An expired reservation cannot
@@ -221,30 +208,41 @@ export async function confirmSale(
   holder: string,
   now: Date = new Date(),
 ): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const sold = await tx.product.updateMany({
-      where: {
-        id: productId,
-        status: ProductStatus.RESERVED,
-        reservedBy: holder,
-        reservedUntil: { gt: now },
-      },
-      data: { status: ProductStatus.SOLD, reservedUntil: null, reservedBy: null },
-    });
+  return prisma.$transaction((tx) => confirmSaleIn(tx, productId, holder, now));
+}
 
-    if (sold.count === 0) return false;
-
-    await tx.productStatusHistory.create({
-      data: {
-        productId,
-        fromStatus: ProductStatus.RESERVED,
-        toStatus: ProductStatus.SOLD,
-        reason: "payment confirmed",
-      },
-    });
-
-    return true;
+/**
+ * {@link confirmSale} inside the caller's transaction, so that confirming an
+ * order with several items can sell all of them or none.
+ */
+export async function confirmSaleIn(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  holder: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const sold = await tx.product.updateMany({
+    where: {
+      id: productId,
+      status: ProductStatus.RESERVED,
+      reservedBy: holder,
+      reservedUntil: { gt: now },
+    },
+    data: { status: ProductStatus.SOLD, reservedUntil: null, reservedBy: null },
   });
+
+  if (sold.count === 0) return false;
+
+  await tx.productStatusHistory.create({
+    data: {
+      productId,
+      fromStatus: ProductStatus.RESERVED,
+      toStatus: ProductStatus.SOLD,
+      reason: "payment confirmed",
+    },
+  });
+
+  return true;
 }
 
 /**

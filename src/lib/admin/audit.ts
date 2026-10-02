@@ -15,7 +15,7 @@ import type { Prisma } from "@/generated/prisma/client";
  * A closed list rather than free text, so a typo is a compile error instead of
  * a category nobody ever filters for. Grows as each admin feature lands.
  */
-export type AuditAction = "staff.grant-role";
+export type AuditAction = "staff.grant-role" | "order.confirm-payment" | "order.reject-payment";
 
 export type AuditEntityType = "User" | "StaffRole" | "Order" | "Product" | "ShopSettings";
 

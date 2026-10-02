@@ -3,7 +3,7 @@ import { randomInt } from "node:crypto";
 import { OrderStatus } from "@/generated/prisma/enums";
 import { getCartContents } from "./cart";
 import { prisma } from "../prisma";
-import { confirmSale, forceRelease, holdForPaymentReview, reserveProduct } from "./reservations";
+import { holdForPaymentReview, reserveProduct } from "./reservations";
 
 /**
  * Orders.
@@ -11,7 +11,7 @@ import { confirmSale, forceRelease, holdForPaymentReview, reserveProduct } from 
  * The moment a cart — which promises nothing — becomes a claim on specific
  * garments. Entering checkout reserves what is still available; submitting an
  * M-Pesa code converts those short holds into long ones while a person checks
- * their messages; the owner's decision either sells the items or returns them.
+ * their messages. The decision that follows is staff's, in admin/orders.ts.
  */
 
 /**
@@ -165,54 +165,6 @@ export async function claimPayment(
   }
 
   return { ok: true };
-}
-
-/**
- * The owner accepts the payment: every item on the order becomes SOLD.
- *
- * All or nothing. A half-confirmed order would leave the buyer having paid for
- * items they do not own, which is the failure this whole phase exists to avoid.
- */
-export async function confirmOrder(orderId: string, note?: string): Promise<boolean> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, userId: true, status: true, items: { select: { productId: true } } },
-  });
-
-  if (!order || order.status !== OrderStatus.PENDING_CONFIRMATION) return false;
-
-  for (const item of order.items) {
-    const sold = await confirmSale(item.productId, order.userId);
-    if (!sold) return false;
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.CONFIRMED, reviewedAt: new Date(), reviewNote: note ?? null },
-  });
-
-  return true;
-}
-
-/** The owner could not match the payment: every item goes back on the rail. */
-export async function rejectOrder(orderId: string, reason: string): Promise<boolean> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { id: true, status: true, items: { select: { productId: true } } },
-  });
-
-  if (!order || order.status !== OrderStatus.PENDING_CONFIRMATION) return false;
-
-  for (const item of order.items) {
-    await forceRelease(item.productId, `payment rejected: ${reason}`);
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { status: OrderStatus.REJECTED, reviewedAt: new Date(), reviewNote: reason },
-  });
-
-  return true;
 }
 
 /** One order, scoped to its buyer so a reference cannot be guessed into. */

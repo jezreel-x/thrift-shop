@@ -4,7 +4,7 @@ import { Category, Condition, Gender, OrderStatus, ProductStatus } from "@/gener
 import { hashPassword } from "@/lib/auth/password";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { addToCart, resolveCart } from "./cart";
-import { beginCheckout, claimPayment, confirmOrder, getOrder, rejectOrder } from "./orders";
+import { beginCheckout, claimPayment, getOrder } from "./orders";
 import { releaseExpiredReservations, reserveProduct } from "./reservations";
 
 cleanDatabaseBetweenTests();
@@ -277,80 +277,6 @@ describe("claimPayment", () => {
       ok: false,
       reason: "hold-lapsed",
     });
-  });
-});
-
-describe("confirmOrder and rejectOrder", () => {
-  async function claimedOrder() {
-    const products = [await makeProduct(), await makeProduct()];
-    const { user, cartId } = await shopperWith(products);
-    const result = await beginCheckout(user.id, cartId, BUYER);
-    if (!result.ok) throw new Error("checkout failed to set up the test");
-    await claimPayment(result.orderId, user.id, "SGH7XKL2M9");
-
-    return { user, products, orderId: result.orderId };
-  }
-
-  it("confirming sells every item on the order", async () => {
-    const { products, orderId } = await claimedOrder();
-
-    expect(await confirmOrder(orderId, "matched SMS")).toBe(true);
-
-    const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
-    expect(order.status).toBe(OrderStatus.CONFIRMED);
-    expect(order.reviewNote).toBe("matched SMS");
-
-    for (const product of products) {
-      const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-      expect(stored.status).toBe(ProductStatus.SOLD);
-      expect(stored.reservedBy).toBeNull();
-    }
-  });
-
-  it("rejecting returns every item to the rail, with the reason recorded", async () => {
-    const { products, orderId } = await claimedOrder();
-
-    expect(await rejectOrder(orderId, "code not in my messages")).toBe(true);
-
-    const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
-    expect(order.status).toBe(OrderStatus.REJECTED);
-
-    for (const product of products) {
-      const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-      expect(stored.status).toBe(ProductStatus.AVAILABLE);
-    }
-  });
-
-  it("will not confirm an order nobody has claimed", async () => {
-    const { user, cartId } = await shopperWith([await makeProduct()]);
-    const result = await beginCheckout(user.id, cartId, BUYER);
-    if (!result.ok) throw new Error("setup");
-
-    expect(await confirmOrder(result.orderId)).toBe(false);
-  });
-
-  it("will not confirm twice", async () => {
-    const { orderId } = await claimedOrder();
-
-    expect(await confirmOrder(orderId)).toBe(true);
-    expect(await confirmOrder(orderId)).toBe(false);
-  });
-
-  it("keeps the order after its products are withdrawn from the catalogue", async () => {
-    // Withdrawing is a soft delete precisely so an order does not lose what it
-    // sold. A hard delete is refused by the foreign key.
-    const { products, orderId } = await claimedOrder();
-    await confirmOrder(orderId);
-
-    await db.product.update({ where: { id: products[0].id }, data: { deletedAt: new Date() } });
-
-    const order = await db.order.findUniqueOrThrow({
-      where: { id: orderId },
-      include: { items: true },
-    });
-    expect(order.items).toHaveLength(2);
-
-    await expect(db.product.delete({ where: { id: products[0].id } })).rejects.toThrow();
   });
 });
 

@@ -46,7 +46,8 @@ export function OrderDecision({
           <div>
             <h3 className="font-medium">Payment arrived</h3>
             <p className="mt-1 text-sm text-muted">
-              You found this code for {total} in the M-Pesa messages. Every item is marked sold.
+              You found this payment of {total} in your own M-Pesa records. Every item is marked
+              sold.
             </p>
           </div>
           {confirmState.error && <Refusal message={confirmState.error} />}

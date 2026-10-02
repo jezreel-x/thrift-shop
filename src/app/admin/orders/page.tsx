@@ -27,7 +27,8 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
     <main className="mx-auto w-full max-w-6xl">
       <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
       <p className="mt-1 text-sm text-muted">
-        Check each claimed M-Pesa code against your messages, then confirm or reject it.
+        Find each claimed payment in your own M-Pesa records, then confirm or reject it. Never rely
+        on a screenshot.
       </p>
 
       <nav aria-label="Order status" className="mt-6 overflow-x-auto">

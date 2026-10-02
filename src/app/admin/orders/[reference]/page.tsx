@@ -76,7 +76,7 @@ export default async function AdminOrderPage({ params }: Props) {
                 id="payment"
                 className="text-[11px] font-medium tracking-wider text-muted uppercase"
               >
-                {pending ? "Look for this in your M-Pesa messages" : "Payment"}
+                {pending ? "Find this payment in your own M-Pesa records" : "Payment"}
               </h2>
               <dl className="mt-3 grid gap-4 sm:grid-cols-3">
                 <div>
@@ -96,6 +96,14 @@ export default async function AdminOrderPage({ params }: Props) {
                   </dd>
                 </div>
               </dl>
+              {pending && (
+                <p className="mt-4 border-t border-border pt-3 text-sm text-muted">
+                  Check it yourself: the SMS from <span className="font-mono">MPESA</span>, your
+                  M-Pesa app, or your statement. Never rely on a screenshot or a message the buyer
+                  forwards. Both are easy to fake, and a fake one can come from an ordinary number
+                  made to look like M-Pesa.
+                </p>
+              )}
             </section>
           )}
 

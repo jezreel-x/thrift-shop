@@ -168,5 +168,6 @@ registered paybill the business does not have yet. A separate, standalone
 
 ## Licence
 
-All rights reserved. The source is public so it can be read and reviewed; it is not licensed for
-reuse. See [LICENSE](LICENSE).
+All rights reserved. You may clone and run it locally to evaluate it; hosting it, using it for a
+business, or redistributing it needs written permission. Contributions are by invitation. See
+[LICENSE](LICENSE).

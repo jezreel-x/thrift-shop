@@ -11,7 +11,9 @@ below.
 **Live:** https://thrift-shop-pi.vercel.app ·
 **Health:** [`/api/health`](https://thrift-shop-pi.vercel.app/api/health)
 
-> **Status:** Phase 1 complete — the catalogue is live and browsable. Buying arrives in Phase 2.
+> **Status:** Phases 0–2 complete: catalogue, accounts, cart, checkout and manual M-Pesa confirmation
+> are live. Phase 3, the admin area, is in progress: staff roles, the access guard and the admin shell
+> are done.
 >
 > The deployed catalogue is populated with **placeholder photography**, so both the pages and
 > `robots.txt` carry `noindex`. The shop's own images replace it before anything is indexed.
@@ -160,6 +162,12 @@ registered paybill the business does not have yet. A separate, standalone
 
 - **Phase 0 — Foundation.** Scaffold, Postgres, CI, deployed. ✅
 - **Phase 1 — Catalogue.** Products, images, search and filters (size first), seed data. ✅
-- **Phase 2 — Buying.** Auth, cart, reservation on checkout, manual M-Pesa confirmation. ← _next_
-- **Phase 3 — Admin.** Product CRUD, order management, role-based access.
+- **Phase 2 — Buying.** Auth, cart, reservation on checkout, manual M-Pesa confirmation. ✅
+- **Phase 3 — Admin.** Role-based access ✅, admin shell ✅, order management ← _next_, product CRUD.
 - **Phase 4 — Operations.** Notifications, reports, CSV export.
+
+## Licence
+
+All rights reserved. You may clone and run it locally to evaluate it; hosting it, using it for a
+business, or redistributing it needs written permission. Contributions are by invitation. See
+[LICENSE](LICENSE).

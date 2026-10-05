@@ -505,6 +505,10 @@ model ShopSettings {
   // Shown on the checkout page, under the payment details.
   paymentNote String?
 
+  // The shop's WhatsApp, canonical 2547XXXXXXXX. Where "Order on WhatsApp"
+  // opens a chat with the order already written. Null: the button is hidden.
+  whatsappNumber String?
+
   updatedAt DateTime @updatedAt
 }
 

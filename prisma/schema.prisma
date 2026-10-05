@@ -104,12 +104,24 @@ model Product {
   // Buyers filter by size before anything else, hence the composite index below.
   size String
 
-  category  Category
-  condition Condition
+  // The old fixed list. Still written until the contract migration; the shop
+  // reads categoryId.
+  category Category
+
+  // The category as data: its name, its options and its size list. Optional
+  // only until the contract migration, after the backfill has set every row.
+  categoryId  String?
+  categoryRef ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Meaningful for thrift and second-hand, not for new stock: shown only where
+  // the category switches it on (ProductCategory.showCondition).
+  condition Condition?
 
   // Cut, not audience. The shop advertises men's, women's and unisex stock
   // explicitly, and this is the filter buyers want directly after size.
-  gender Gender
+  // Shown only where the category switches it on (ProductCategory.showFit):
+  // clothing yes, perfume no.
+  gender Gender?
 
   status ProductStatus @default(AVAILABLE)
 
@@ -155,6 +167,7 @@ model Product {
   // The sweep asks for reservations that have lapsed. Without this it scans the
   // whole catalogue every time it runs, which is every minute or so forever.
   @@index([status, reservedUntil])
+  @@index([categoryId])
 }
 
 model ProductImage {
@@ -717,4 +730,38 @@ model StockMovement {
   createdAt DateTime @default(now())
 
   @@index([variantId, createdAt])
+}
+
+// ------------------------------ Categories ------------------------------
+//
+// Data the owner manages, not a list in the schema: a new kind of stock
+// (Sneakers, Rings, Fragrance) is a row, not a migration. Each category is the
+// template for its products: the names of their two options and the values
+// option 2 is offered in. See docs/product-variants.md.
+model ProductCategory {
+  id       String @id @default(cuid())
+  // In URLs and filters: /?category=wide-leg-sweatpants.
+  slug     String @unique
+  name     String
+  // Order in the filters and menus.
+  position Int    @default(0)
+
+  // "Colour" | "Metal" — null when products here have no option 1.
+  option1Name   String?
+  // "Size" | "Waist" | "Ring size" | "Volume" — null when they have no option 2.
+  option2Name   String?
+  // Offered in this order: ["XS","S","M","L","XL","XXL"], ["28","30",…].
+  option2Values String[]
+
+  // Whether Condition (Excellent, Good…) and Fit (Men's, Women's, Unisex)
+  // apply to products here.
+  showCondition Boolean @default(true)
+  showFit       Boolean @default(true)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
 }

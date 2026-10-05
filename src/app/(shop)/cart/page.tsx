@@ -9,6 +9,9 @@ import { ProductCard } from "@/components/product-card";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { listSuggestions } from "@/lib/shop/suggestions";
+import { OrderOnWhatsApp } from "@/components/order-on-whatsapp";
+import { getShopWhatsApp } from "@/lib/shop/settings";
+import { orderMessage } from "@/lib/shop/whatsapp-order";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {
@@ -31,7 +34,9 @@ export default async function CartPage() {
   if (lines.length === 0) return <EmptyCart />;
 
   const unavailable = lines.filter((line) => !line.available);
-  const user = await getCurrentUser();
+  const [user, whatsapp] = await Promise.all([getCurrentUser(), getShopWhatsApp()]);
+  // What can actually be had, in the quantities that can be had.
+  const orderable = lines.filter((line) => line.available && line.quantityAvailable > 0);
   const suggestions = await listSuggestions({
     productIds: [...new Set(lines.map((line) => line.productId))],
     sizes: lines.flatMap((line) => (line.size ? [line.size] : [])),
@@ -79,6 +84,24 @@ export default async function CartPage() {
         <p className="mt-6 rounded-lg bg-neutral-100 px-4 py-3 text-center text-sm text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
           Nothing in your cart is available to buy.
         </p>
+      )}
+
+      {whatsapp && orderable.length > 0 && (
+        <div className="mt-3">
+          <OrderOnWhatsApp
+            number={whatsapp}
+            label="Or order on WhatsApp"
+            message={orderMessage(
+              orderable.map((line) => ({
+                title: line.title,
+                swatch: line.swatch,
+                size: line.size || null,
+                quantity: line.quantityAvailable,
+                priceCents: line.priceCents,
+              })),
+            )}
+          />
+        </div>
       )}
 
       <Link

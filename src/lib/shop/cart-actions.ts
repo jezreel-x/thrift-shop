@@ -11,6 +11,7 @@ import {
   clearCart,
   removeFromCart,
   resolveCart,
+  setCartQuantity,
 } from "./cart";
 
 /**
@@ -49,6 +50,22 @@ export async function removeFromCartAction(formData: FormData): Promise<void> {
 
   const cartId = await currentCart();
   await removeFromCart(cartId, variantId);
+
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Sets a line's quantity: the − and + of a stepper, each its own small form.
+ * Zero removes the line. Capped at what is free when the cart is next shown,
+ * and at five by the database.
+ */
+export async function setCartQuantityAction(formData: FormData): Promise<void> {
+  const variantId = String(formData.get("variantId") ?? "");
+  const quantity = Number(formData.get("quantity"));
+  if (!variantId || !Number.isFinite(quantity)) return;
+
+  const cartId = await currentCart();
+  await setCartQuantity(cartId, variantId, quantity);
 
   revalidatePath("/", "layout");
 }

@@ -11,6 +11,7 @@ import {
   parseProductQuery,
 } from "@/lib/shop/product-search-params";
 import type { ProductQuery } from "@/lib/shop/product-search-params";
+import { readCart } from "@/lib/shop/cart-session";
 import { listCategories, sizesAcross } from "@/lib/shop/categories";
 import { listProducts } from "@/lib/shop/products";
 
@@ -76,7 +77,9 @@ export default async function CataloguePage({ searchParams }: PageProps<"/">) {
 }
 
 async function Results({ query }: { query: ProductQuery }) {
-  const { items, total, pageCount } = await listProducts(query);
+  const [{ items, total, pageCount }, cart] = await Promise.all([listProducts(query), readCart()]);
+  // What is already in the cart, so a card can show its stepper.
+  const inCart = new Map(cart?.lines.map((line) => [line.variantId, line.quantity]) ?? []);
 
   if (items.length === 0) return <EmptyState query={query} />;
 
@@ -90,7 +93,12 @@ async function Results({ query }: { query: ProductQuery }) {
         {items.map((product, index) => (
           // The first row is this page's largest contentful paint; the rest can
           // wait until they are scrolled towards.
-          <ProductCard key={product.id} product={product} priority={index < 4} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            priority={index < 4}
+            inCartQuantity={product.quickAdd ? (inCart.get(product.quickAdd.variantId) ?? 0) : 0}
+          />
         ))}
       </div>
 

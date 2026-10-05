@@ -174,6 +174,50 @@ export async function savePaymentSettings(input: {
   });
 }
 
+/**
+ * Removes the payment details, so checkout says payment is not set up and
+ * nobody can pay until new details are saved.
+ *
+ * For a shop that is not ready to take money yet — or a sample shop that
+ * should not be showing anybody's real number. Audited like a change, with
+ * what was removed, so it can be put back by hand.
+ */
+export async function clearPaymentSettings(input: {
+  actorId: string;
+}): Promise<{ changed: boolean }> {
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.shopSettings.findUnique({ where: { id: SINGLETON } });
+    if (!before?.payment && !before?.tillNumber && !before?.paymentName) return { changed: false };
+
+    await tx.shopSettings.update({
+      where: { id: SINGLETON },
+      data: {
+        payment: null,
+        tillNumber: null,
+        accountNumber: null,
+        paymentName: null,
+        paymentNote: null,
+      },
+    });
+
+    await recordAudit(tx, {
+      actorId: input.actorId,
+      action: "settings.clear-payment",
+      entityType: "ShopSettings",
+      entityId: SINGLETON,
+      before: {
+        method: before.payment,
+        number: before.tillNumber,
+        accountNumber: before.accountNumber,
+        name: before.paymentName,
+        note: before.paymentNote,
+      },
+    });
+
+    return { changed: true };
+  });
+}
+
 export type PaymentSettingsChange = {
   id: string;
   createdAt: Date;
@@ -185,11 +229,15 @@ export type PaymentSettingsChange = {
 /** The latest changes to the payment settings, newest first. */
 export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSettingsChange[]> {
   const entries = await prisma.auditLog.findMany({
-    where: { entityType: "ShopSettings", action: "settings.update-payment" },
+    where: {
+      entityType: "ShopSettings",
+      action: { in: ["settings.update-payment", "settings.clear-payment"] },
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {
       id: true,
+      action: true,
       createdAt: true,
       before: true,
       after: true,
@@ -201,7 +249,10 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
     id: entry.id,
     createdAt: entry.createdAt,
     actor: entry.actor?.name ?? entry.actor?.email ?? "a script",
-    changes: describeChanges(asRecord(entry.before), asRecord(entry.after)),
+    changes:
+      entry.action === "settings.clear-payment"
+        ? ["Payment details removed: checkout shows payment as not set up"]
+        : describeChanges(asRecord(entry.before), asRecord(entry.after)),
   }));
 }
 

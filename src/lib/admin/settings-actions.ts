@@ -6,6 +6,7 @@ import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "./access";
 import {
   type PaymentSettingsField,
+  clearPaymentSettings,
   parsePaymentSettings,
   savePaymentSettings,
 } from "./payment-settings";
@@ -34,4 +35,16 @@ export async function savePaymentSettingsAction(
   revalidatePath("/admin/settings");
 
   return { saved: changed ? "changed" : "unchanged" };
+}
+
+/**
+ * Removes the payment details. Same permission as changing them: taking the
+ * shop's payments offline is as consequential as redirecting them.
+ */
+export async function clearPaymentSettingsAction(): Promise<void> {
+  const { user } = await requirePermission(Permission.SETTINGS_EDIT);
+
+  await clearPaymentSettings({ actorId: user.id });
+
+  revalidatePath("/admin/settings");
 }

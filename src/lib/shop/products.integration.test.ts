@@ -19,20 +19,40 @@ async function makeProduct(
   overrides: Partial<Parameters<typeof db.product.create>[0]["data"]> = {},
 ) {
   sequence += 1;
+  // Written the old way for readability — a size and a status — and turned into
+  // what the shop now reads: one variant, its stock, and a live hold if reserved.
+  const { status, ...data } = overrides;
+  const size = typeof data.size === "string" ? data.size : "M";
 
-  return db.product.create({
+  const product = await db.product.create({
     data: {
       slug: `product-${sequence}`,
       title: `Product ${sequence}`,
       priceCents: 100_000,
-      size: "M",
+      size,
       category: Category.T_SHIRTS,
       condition: Condition.GOOD,
       gender: Gender.UNISEX,
       createdAt: new Date("2026-01-01T00:00:00Z"),
-      ...overrides,
+      ...data,
     },
   });
+
+  const variant = await db.productVariant.create({
+    data: { productId: product.id, option2: size, stock: status === ProductStatus.SOLD ? 0 : 1 },
+  });
+  if (status === ProductStatus.RESERVED) {
+    await db.stockHold.create({
+      data: {
+        variantId: variant.id,
+        holder: "another-shopper",
+        quantity: 1,
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+      },
+    });
+  }
+
+  return product;
 }
 
 beforeEach(() => {
@@ -62,9 +82,9 @@ describe("listProducts — what is visible", () => {
 
   it("ranks available above reserved above sold", async () => {
     // Inserted worst-first so passing cannot be an accident of insertion order.
-    // This also pins a real coupling: Postgres sorts an enum by declaration
-    // order, so reordering ProductStatus in the schema would silently float
-    // sold items to the top of every page.
+    // Availability is computed from stock and live holds, and AVAILABILITY_RANK
+    // decides the order; a mistake there would float sold items to the top of
+    // every page.
     await makeProduct({ slug: "sold", status: ProductStatus.SOLD });
     await makeProduct({ slug: "reserved", status: ProductStatus.RESERVED });
     await makeProduct({ slug: "available", status: ProductStatus.AVAILABLE });

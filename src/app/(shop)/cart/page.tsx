@@ -37,7 +37,7 @@ export default async function CartPage() {
 
       <ul className="mt-8 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
         {lines.map((line) => (
-          <CartRow key={line.productId} line={line} />
+          <CartRow key={line.variantId} line={line} />
         ))}
       </ul>
 
@@ -103,12 +103,15 @@ function CartRow({ line }: { line: CartLine }) {
         <Link href={`/products/${line.slug}`} className="font-medium hover:underline">
           {line.title}
         </Link>
-        <span className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">{line.size}</span>
+        <span className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
+          {[line.swatch, line.size].filter(Boolean).join(" · ")}
+          {line.quantity > 1 && ` · ×${line.quantity}`}
+        </span>
 
         {!line.available && <UnavailableNote reason={line.reason} />}
 
         <form action={removeFromCartAction} className="mt-auto pt-2">
-          <input type="hidden" name="productId" value={line.productId} />
+          <input type="hidden" name="variantId" value={line.variantId} />
           <button
             type="submit"
             className="text-sm text-neutral-500 underline-offset-4 hover:underline dark:text-neutral-400"
@@ -121,7 +124,7 @@ function CartRow({ line }: { line: CartLine }) {
       <span
         className={`font-medium ${line.available ? "" : "text-neutral-400 line-through dark:text-neutral-600"}`}
       >
-        {formatPrice(line.priceCents)}
+        {formatPrice(line.priceCents * line.quantity)}
       </span>
     </li>
   );

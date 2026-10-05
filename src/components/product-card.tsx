@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { ProductStatus } from "@/generated/prisma/enums";
 import { CONDITION_LABELS } from "@/lib/shop/catalogue";
 import { formatPrice } from "@/lib/money";
 import type { ProductCard as ProductCardData } from "@/lib/shop/products";
@@ -21,8 +20,8 @@ export function ProductCard({
   priority?: boolean;
 }) {
   const image = product.images[0];
-  const isSold = product.status === ProductStatus.SOLD;
-  const isReserved = product.status === ProductStatus.RESERVED;
+  const isSold = product.availability === "SOLD";
+  const isReserved = product.availability === "RESERVED";
 
   return (
     <Link
@@ -68,7 +67,8 @@ export function ProductCard({
 
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
           {product.brand ? `${product.brand} · ` : ""}
-          {product.size} · {CONDITION_LABELS[product.condition]}
+          {product.sizes.length > 0 ? `${product.sizes.join(", ")} · ` : ""}
+          {CONDITION_LABELS[product.condition]}
         </p>
 
         <p

@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import { AddToCart } from "@/components/add-to-cart";
 import { ProductGallery } from "@/components/product-gallery";
-import { ProductStatus } from "@/generated/prisma/enums";
 import { CATEGORY_LABELS, CONDITION_LABELS, GENDER_LABELS } from "@/lib/shop/catalogue";
 import { formatPrice } from "@/lib/money";
 import { readCart } from "@/lib/shop/cart-session";
@@ -23,7 +22,8 @@ export async function generateMetadata({
 
   const description =
     product.description ??
-    `${CONDITION_LABELS[product.condition]} condition, size ${product.size}. ` +
+    `${CONDITION_LABELS[product.condition]} condition` +
+      `${product.variants[0]?.option2 ? `, size ${product.variants[0].option2}` : ""}. ` +
       `${formatPrice(product.priceCents)}. One of one — when it is gone, it is gone.`;
 
   const image = product.images[0];
@@ -52,11 +52,14 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
 
   if (!product) notFound();
 
-  const isSold = product.status === ProductStatus.SOLD;
-  const isReserved = product.status === ProductStatus.RESERVED;
+  const isSold = product.availability === "SOLD";
+  const isReserved = product.availability === "RESERVED";
+  const sizes = product.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : []));
+  // One variant per product until the storefront offers a choice.
+  const variant = product.variants[0];
 
   const cart = await readCart();
-  const inCart = cart?.lines.some((line) => line.productId === product.id) ?? false;
+  const inCart = cart?.lines.some((line) => line.variantId === variant?.id) ?? false;
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -100,7 +103,7 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
           )}
 
           <dl className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-neutral-200 pt-6 text-sm dark:border-neutral-800">
-            <Fact label="Size" value={product.size} />
+            {sizes.length > 0 && <Fact label="Size" value={sizes.join(", ")} />}
             <Fact label="Condition" value={CONDITION_LABELS[product.condition]} />
             <Fact label="Category" value={CATEGORY_LABELS[product.category]} />
             <Fact label="Fit" value={GENDER_LABELS[product.gender]} />
@@ -133,7 +136,9 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
           </div>
 
           <div className="mt-6">
-            <AddToCart productId={product.id} inCart={inCart} disabled={isSold} />
+            {variant ? (
+              <AddToCart variantId={variant.id} inCart={inCart} disabled={isSold} />
+            ) : null}
           </div>
         </div>
       </div>
@@ -172,7 +177,7 @@ function ProductStructuredData({
     description: product.description ?? undefined,
     image: product.images.map((image) => image.url),
     brand: product.brand ? { "@type": "Brand", name: product.brand } : undefined,
-    size: product.size,
+    size: product.variants[0]?.option2 ?? undefined,
     itemCondition:
       product.condition === "NEW_WITH_TAGS"
         ? "https://schema.org/NewCondition"
@@ -182,7 +187,7 @@ function ProductStructuredData({
       price: (product.priceCents / 100).toFixed(2),
       priceCurrency: "KES",
       availability:
-        product.status === ProductStatus.AVAILABLE
+        product.availability === "AVAILABLE"
           ? "https://schema.org/InStock"
           : "https://schema.org/SoldOut",
     },

@@ -1,6 +1,13 @@
 import type { Category, Condition, Gender } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "../prisma";
+import {
+  AVAILABILITY_RANK,
+  type ProductAvailability,
+  type VariantAvailability,
+  productAvailability,
+} from "./availability";
+import { getAvailability } from "./reservations";
 
 /**
  * Catalogue queries.
@@ -40,12 +47,11 @@ const cardSelect = {
   title: true,
   brand: true,
   priceCents: true,
-  size: true,
   category: true,
   condition: true,
   gender: true,
-  status: true,
   createdAt: true,
+  variants: { select: { id: true, option2: true }, orderBy: { createdAt: "asc" } },
   images: {
     select: { url: true, alt: true, width: true, height: true },
     orderBy: { position: "asc" },
@@ -55,7 +61,12 @@ const cardSelect = {
   },
 } satisfies Prisma.ProductSelect;
 
-export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }>;
+export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }> & {
+  /** From its variants' stock and live holds. */
+  availability: ProductAvailability;
+  /** Every option-2 value the product comes in, for the card's subtitle. */
+  sizes: string[];
+};
 
 export type ProductListPage = {
   items: ProductCard[];
@@ -80,35 +91,94 @@ export async function listProducts({
   const where = whereFor(filters);
   const currentPage = Math.max(1, Math.trunc(page));
 
-  // One round trip for both. The count is needed to render pagination, and on a
-  // database an ocean away two sequential queries cost twice the latency.
-  const [items, total] = await prisma.$transaction([
-    prisma.product.findMany({
-      where,
-      select: cardSelect,
-      orderBy: orderFor(sort),
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-    }),
-    prisma.product.count({ where }),
-  ]);
+  // Availability leads the sort, and it is computed — stock minus live holds —
+  // so the database cannot order by it. Every match is ranked here, then one
+  // page is fetched. Cheap at a few hundred products. At tens of thousands the
+  // upgrade is a SQL query that ranks in the database, joining holds.
+  const candidates = await prisma.product.findMany({
+    where,
+    select: {
+      id: true,
+      priceCents: true,
+      createdAt: true,
+      variants: { select: { id: true } },
+    },
+  });
+
+  const availability = await getAvailability(
+    candidates.flatMap((product) => product.variants.map((variant) => variant.id)),
+  );
+  const stateOf = (variantIds: { id: string }[]) =>
+    productAvailability(variantIds.map(({ id }) => availability.get(id) ?? NO_STOCK));
+
+  const ranked = candidates
+    .map((product) => ({ ...product, state: stateOf(product.variants) }))
+    .sort((a, b) => compareFor(sort)(a, b));
+
+  const pageIds = ranked
+    .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+    .map((product) => product.id);
+  const stateById = new Map(ranked.map((product) => [product.id, product.state]));
+
+  const cards = await prisma.product.findMany({
+    where: { id: { in: pageIds } },
+    select: cardSelect,
+  });
+  const byId = new Map(cards.map((card) => [card.id, card]));
+
+  const items = pageIds.flatMap((id) => {
+    const card = byId.get(id);
+    if (!card) return [];
+
+    return [
+      {
+        ...card,
+        availability: stateById.get(id) ?? "SOLD",
+        sizes: card.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : [])),
+      },
+    ];
+  });
 
   return {
     items,
-    total,
+    total: ranked.length,
     page: currentPage,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageCount: Math.max(1, Math.ceil(ranked.length / PAGE_SIZE)),
   };
 }
 
-/** A single product with all of its images, for the detail page. */
+/**
+ * A single product with its images and variants, for the detail page.
+ *
+ * Each variant carries its stock and the units other shoppers hold, so the page
+ * can say what is free; the product carries the summary for its badge.
+ */
 export async function getProductBySlug(slug: string) {
-  return prisma.product.findFirst({
+  const product = await prisma.product.findFirst({
     where: { slug, deletedAt: null },
     include: {
       images: { orderBy: { position: "asc" } },
+      variants: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          option2: true,
+          priceCents: true,
+          swatch: { select: { id: true, name: true, hex: true } },
+        },
+      },
     },
   });
+
+  if (!product) return null;
+
+  const availability = await getAvailability(product.variants.map((variant) => variant.id));
+  const variants = product.variants.map((variant) => ({
+    ...variant,
+    ...(availability.get(variant.id) ?? NO_STOCK),
+  }));
+
+  return { ...product, variants, availability: productAvailability(variants) };
 }
 
 /**
@@ -131,7 +201,9 @@ function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
   const { sizes, categories, conditions, genders, minPriceCents, maxPriceCents, search } = filters;
   const where: Prisma.ProductWhereInput = { deletedAt: null };
 
-  if (sizes?.length) where.size = { in: sizes };
+  // Any variant in one of the sizes, sold out or not: the catalogue shows sold
+  // pieces, so a size filter must find them too.
+  if (sizes?.length) where.variants = { some: { option2: { in: sizes } } };
   if (categories?.length) where.category = { in: categories };
   if (conditions?.length) where.condition = { in: conditions };
   if (genders?.length) where.gender = { in: genders };
@@ -159,24 +231,26 @@ function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
   return where;
 }
 
+const NO_STOCK: VariantAvailability = { stock: 0, heldByOthers: 0 };
+
+type Rankable = { id: string; priceCents: number; createdAt: Date; state: ProductAvailability };
+
 /**
- * Sort order, always led by status.
- *
- * Postgres orders an enum by the order its values were declared, and
- * ProductStatus is declared AVAILABLE, RESERVED, SOLD — which is exactly the
- * order a shopper wants. That is a real coupling between the schema's
- * declaration order and this sort, so it is asserted in the integration tests:
- * reordering the enum would silently float sold items to the top.
+ * Sort order, always led by availability: what can be bought now, then what is
+ * in someone's checkout, then what has sold.
  */
-function orderFor(sort: ProductSort): Prisma.ProductOrderByWithRelationInput[] {
-  const secondary: Prisma.ProductOrderByWithRelationInput[] =
+function compareFor(sort: ProductSort): (a: Rankable, b: Rankable) => number {
+  const secondary = (a: Rankable, b: Rankable) =>
     sort === "price-asc"
-      ? [{ priceCents: "asc" }]
+      ? a.priceCents - b.priceCents
       : sort === "price-desc"
-        ? [{ priceCents: "desc" }]
-        : [{ createdAt: "desc" }];
+        ? b.priceCents - a.priceCents
+        : b.createdAt.getTime() - a.createdAt.getTime();
 
   // `id` last so the order is total: two items created in the same millisecond
   // must not swap places between pages, which would drop or duplicate one.
-  return [{ status: "asc" }, ...secondary, { id: "asc" }];
+  return (a, b) =>
+    AVAILABILITY_RANK[a.state] - AVAILABILITY_RANK[b.state] ||
+    secondary(a, b) ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }

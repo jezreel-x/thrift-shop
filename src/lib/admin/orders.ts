@@ -67,7 +67,15 @@ export async function confirmOrder(input: {
 
       const lapsed: string[] = [];
       for (const item of claimed.order.items) {
-        const sold = await confirmSaleIn(tx, item.productId, claimed.order.userId, now);
+        const sold = item.variantId
+          ? await confirmSaleIn(tx, {
+              variantId: item.variantId,
+              holder: claimed.order.userId,
+              quantity: item.quantity,
+              orderId: input.orderId,
+              now,
+            })
+          : false;
         if (!sold) lapsed.push(item.title);
       }
       if (lapsed.length > 0) throw new HoldLapsed(lapsed);
@@ -119,9 +127,7 @@ export async function rejectOrder(input: {
 
     let released = 0;
     for (const item of claimed.order.items) {
-      if (
-        await releaseHoldIn(tx, item.productId, claimed.order.userId, `payment rejected: ${reason}`)
-      ) {
+      if (item.variantId && (await releaseHoldIn(tx, item.variantId, claimed.order.userId))) {
         released += 1;
       }
     }
@@ -165,7 +171,11 @@ async function claimDecision(
 
   const order = await tx.order.findUniqueOrThrow({
     where: { id: orderId },
-    select: { reference: true, userId: true, items: { select: { productId: true, title: true } } },
+    select: {
+      reference: true,
+      userId: true,
+      items: { select: { variantId: true, title: true, quantity: true } },
+    },
   });
 
   return { ok: true as const, order };
@@ -255,9 +265,6 @@ export async function getOrderForReview(reference: string) {
           product: {
             select: {
               slug: true,
-              status: true,
-              reservedBy: true,
-              reservedUntil: true,
               images: { take: 1, orderBy: { position: "asc" }, select: { url: true, alt: true } },
             },
           },
@@ -267,6 +274,24 @@ export async function getOrderForReview(reference: string) {
   });
 
   if (!order) return null;
+
+  // Whether each line is still held for this buyer, and until when.
+  const holds = await prisma.stockHold.findMany({
+    where: {
+      holder: order.userId,
+      variantId: { in: order.items.flatMap((item) => (item.variantId ? [item.variantId] : [])) },
+    },
+    select: { variantId: true, quantity: true, expiresAt: true },
+  });
+  const holdFor = new Map(holds.map((hold) => [hold.variantId, hold]));
+  const items = order.items.map((item) => {
+    const hold = item.variantId ? holdFor.get(item.variantId) : undefined;
+
+    return {
+      ...item,
+      holdExpiresAt: hold && hold.quantity >= item.quantity ? hold.expiresAt : null,
+    };
+  });
 
   const history = await prisma.auditLog.findMany({
     where: { entityType: "Order", entityId: order.id },
@@ -280,7 +305,7 @@ export async function getOrderForReview(reference: string) {
     },
   });
 
-  return { ...order, history };
+  return { ...order, items, history };
 }
 
 /**

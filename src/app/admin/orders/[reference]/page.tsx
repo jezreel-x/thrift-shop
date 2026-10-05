@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { OrderDecision } from "@/components/admin/order-decision";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
-import { OrderStatus, Permission, ProductStatus } from "@/generated/prisma/enums";
+import { OrderStatus, Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
 import { getOrderForReview } from "@/lib/admin/orders";
@@ -37,16 +37,10 @@ export default async function AdminOrderPage({ params }: Props) {
 
   const pending = order.status === OrderStatus.PENDING_CONFIRMATION;
   const now = new Date();
-  const items = order.items.map((item) => {
-    const { product } = item;
-    const heldForBuyer =
-      product.status === ProductStatus.RESERVED &&
-      product.reservedBy === order.userId &&
-      product.reservedUntil !== null &&
-      product.reservedUntil > now;
-
-    return { ...item, heldForBuyer };
-  });
+  const items = order.items.map((item) => ({
+    ...item,
+    heldForBuyer: item.holdExpiresAt !== null && item.holdExpiresAt > now,
+  }));
   const lapsed = pending ? items.filter((item) => !item.heldForBuyer) : [];
   const total = formatPrice(order.totalCents);
 
@@ -162,12 +156,15 @@ export default async function AdminOrderPage({ params }: Props) {
                         {item.title}
                       </Link>
                       <p className="text-sm text-muted">
-                        Size {item.size}
+                        {[item.swatch, item.size && `Size ${item.size}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        {item.quantity > 1 && ` · ×${item.quantity}`}
                         {pending && (
                           <>
                             {" · "}
-                            {item.heldForBuyer && item.product.reservedUntil ? (
-                              <>Held until {formatDateTime(item.product.reservedUntil)}</>
+                            {item.heldForBuyer && item.holdExpiresAt ? (
+                              <>Held until {formatDateTime(item.holdExpiresAt)}</>
                             ) : (
                               <span className="text-amber-700 dark:text-amber-300">
                                 Hold ran out
@@ -177,7 +174,7 @@ export default async function AdminOrderPage({ params }: Props) {
                         )}
                       </p>
                     </div>
-                    <p className="tabular-nums">{formatPrice(item.priceCents)}</p>
+                    <p className="tabular-nums">{formatPrice(item.priceCents * item.quantity)}</p>
                   </li>
                 );
               })}

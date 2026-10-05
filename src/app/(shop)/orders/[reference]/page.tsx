@@ -64,10 +64,13 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
               <Link href={`/products/${item.product.slug}`} className="font-medium hover:underline">
                 {item.title}
               </Link>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">{item.size}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                {[item.swatch, item.size].filter(Boolean).join(" · ")}
+                {item.quantity > 1 && ` · ×${item.quantity}`}
+              </p>
             </div>
 
-            <span className="font-medium">{formatPrice(item.priceCents)}</span>
+            <span className="font-medium">{formatPrice(item.priceCents * item.quantity)}</span>
           </li>
         ))}
       </ul>

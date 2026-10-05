@@ -11,11 +11,11 @@ import { addToCartAction, removeFromCartAction } from "@/lib/shop/cart-actions";
  * something real to hold.
  */
 export function AddToCart({
-  productId,
+  variantId,
   inCart,
   disabled,
 }: {
-  productId: string;
+  variantId: string;
   inCart: boolean;
   disabled?: boolean;
 }) {
@@ -37,7 +37,7 @@ export function AddToCart({
           In your cart — view it
         </Link>
         <form action={removeFromCartAction}>
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="variantId" value={variantId} />
           <button
             type="submit"
             className="rounded-lg px-3 py-3 text-sm text-neutral-500 underline-offset-4 hover:underline dark:text-neutral-400"
@@ -51,7 +51,7 @@ export function AddToCart({
 
   return (
     <form action={addToCartAction}>
-      <input type="hidden" name="productId" value={productId} />
+      <input type="hidden" name="variantId" value={variantId} />
       <button
         type="submit"
         className="w-full rounded-lg bg-neutral-900 px-4 py-3 font-medium text-white transition hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"

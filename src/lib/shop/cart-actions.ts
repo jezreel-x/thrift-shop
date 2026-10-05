@@ -32,22 +32,23 @@ const CART_COOKIE_OPTIONS = {
 } as const;
 
 export async function addToCartAction(formData: FormData): Promise<void> {
-  const productId = String(formData.get("productId") ?? "");
-  if (!productId) return;
+  const variantId = String(formData.get("variantId") ?? "");
+  if (!variantId) return;
+  const quantity = Number(formData.get("quantity") ?? 1) || 1;
 
   const cartId = await currentCart();
-  await addToCart(cartId, productId);
+  await addToCart(cartId, variantId, quantity);
 
   // The header's count and the item's own button both change.
   revalidatePath("/", "layout");
 }
 
 export async function removeFromCartAction(formData: FormData): Promise<void> {
-  const productId = String(formData.get("productId") ?? "");
-  if (!productId) return;
+  const variantId = String(formData.get("variantId") ?? "");
+  if (!variantId) return;
 
   const cartId = await currentCart();
-  await removeFromCart(cartId, productId);
+  await removeFromCart(cartId, variantId);
 
   revalidatePath("/", "layout");
 }

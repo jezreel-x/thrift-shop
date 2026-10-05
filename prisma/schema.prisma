@@ -128,6 +128,10 @@ model Product {
 
   images        ProductImage[]
   statusHistory ProductStatusHistory[]
+  // What is actually bought. One per product for a thrift item; one per
+  // colour-and-size combination for stock. See docs/product-variants.md.
+  variants      ProductVariant[]
+  swatches      ProductSwatch[]
   cartItems     CartItem[]
   orderItems    OrderItem[]
 
@@ -157,6 +161,10 @@ model ProductImage {
   id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Which option-1 value (Khaki, Gold) this photo shows. Null: every one.
+  swatchId String?
+  swatch   ProductSwatch? @relation(fields: [swatchId], references: [id], onDelete: SetNull)
 
   // Where the image is served from.
   url String
@@ -328,16 +336,22 @@ model CartItem {
   cartId String
   cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
+  // Kept alongside the variant: removing a product still empties it from carts.
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
+  // What the shopper picked. Optional only until the contract migration.
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // 1 to 5. The cart reserves nothing, so this is a wish, checked against what
+  // is free every time the cart is shown and again at checkout.
+  quantity Int @default(1)
+
   createdAt DateTime @default(now())
 
-  // No quantity column, for the same reason Product has none: the row is the
-  // garment. "Two of these" is not a thing anyone can ask for here, and the
-  // unique constraint is what makes adding twice idempotent rather than an
-  // error to handle.
-  @@unique([cartId, productId])
+  // One line per variant: adding the same size again raises the quantity.
+  @@unique([cartId, variantId])
   @@index([cartId])
 }
 
@@ -426,9 +440,22 @@ model OrderItem {
   size       String
   priceCents Int
 
-  // One of one: a product appears at most once on an order.
-  @@unique([orderId, productId])
+  // What exactly was bought. Optional only until the contract migration,
+  // after the backfill has pointed every existing row at its variant.
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  // Snapshot of the option-1 value ("Khaki"), alongside title, size and price.
+  swatch String?
+
+  // How many units at priceCents each.
+  quantity Int @default(1)
+
+  // A variant appears at most once on an order; two sizes of one product are
+  // two lines.
+  @@unique([orderId, variantId])
   @@index([productId])
+  @@index([variantId])
 }
 
 // ----------------------------- Settings -----------------------------
@@ -584,4 +611,110 @@ model AuditLog {
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
   @@index([createdAt])
+}
+
+// ------------------------------ Variants and stock ------------------------------
+//
+// See docs/product-variants.md. A product has up to two options: option 1, the
+// look (Colour, Metal), held here as swatches with their own photos; option 2,
+// the fit or amount (Size, Waist, Volume), held as text on each variant.
+
+model ProductSwatch {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // As the owner writes it: "Khaki", "Rose gold".
+  name     String
+  // The dot on the swatch, "#c3b091". Optional: a metal may be better as a word.
+  hex      String?
+  position Int     @default(0)
+
+  variants ProductVariant[]
+  images   ProductImage[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([productId, name])
+  @@index([productId, position])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Null: the product has no option 1.
+  swatchId String?
+  swatch   ProductSwatch? @relation(fields: [swatchId], references: [id], onDelete: Restrict)
+
+  // "M", "32", "100 ml". Null: the product has no option 2.
+  option2 String?
+
+  // Units in the shop and not yet sold. It moves only when a sale is confirmed
+  // or the owner changes it, and every move is in StockMovement. Holds do not
+  // touch it: what a buyer can take is stock minus unexpired holds, worked out
+  // when they reserve. Never negative, by a CHECK in the migration.
+  stock Int @default(0)
+
+  // Null: use the price on the product.
+  priceCents Int?
+
+  holds      StockHold[]
+  movements  StockMovement[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One row per combination. The migration makes this NULLS NOT DISTINCT, so a
+  // product with no options still gets exactly one variant. Prisma cannot
+  // express that, so the SQL is edited by hand.
+  @@unique([productId, swatchId, option2])
+  @@index([productId])
+}
+
+// A buyer holding units while they check out and pay.
+//
+// Expiry is a matter of time, not of a job running: a hold past expiresAt
+// simply stops counting. Deleting expired rows is tidiness, nothing more.
+model StockHold {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // A user id, kept opaque as Product.reservedBy was.
+  holder    String
+  quantity  Int
+  // 15 minutes at checkout; 24 hours once payment is claimed.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One hold per buyer per variant: checking out again extends it.
+  @@unique([variantId, holder])
+  @@index([variantId, expiresAt])
+  @@index([expiresAt])
+}
+
+// The ledger: every change to ProductVariant.stock, with why and who.
+model StockMovement {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // -1 sold, +5 restock, -1 sold elsewhere.
+  change Int
+  // "opening stock", "sale confirmed", "sold elsewhere", "restock", "count corrected".
+  reason String
+
+  orderId String?
+  // Who, when a person did it. Not a relation: the ledger outlives accounts.
+  actorId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([variantId, createdAt])
 }

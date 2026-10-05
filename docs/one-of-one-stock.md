@@ -1,5 +1,13 @@
 # One-of-one stock
 
+> **Since variants (October 2026):** a product now has variants with stock counts,
+> and a thrift item is the special case with one variant and a stock of 1. The
+> guarantee below is unchanged; the mechanism generalised from a status on the
+> product to a locked count on the variant. See "The mechanism" and
+> [product-variants.md](product-variants.md). The reasoning in this document
+> about why the race matters, holders, the two windows, the sweep and carts all
+> still holds.
+
 Every garment in this shop exists exactly once. That single fact drives more of
 the design than anything else, and it makes one problem genuinely hard: two
 buyers reaching checkout at the same moment.
@@ -38,7 +46,15 @@ fail against the bug.
 
 ## The mechanism
 
-Every operation states its precondition inside the `WHERE` clause of a single
+**Now:** reserving locks the variant's row (`SELECT … FOR UPDATE`), counts the
+units other buyers hold in unexpired holds, and creates or extends this buyer's
+hold only if enough are free, all in one transaction. A second buyer for the
+same variant waits on the lock and counts after the first has committed. Holds
+are counted against stock, never subtracted from it, so a lapsed hold simply
+stops counting. The concurrency tests cover a stock of 1 (one winner of twenty)
+and a stock of 3 (exactly three units held, however requests interleave).
+
+**Originally,** with one-of-one stock and no variants, every operation stated its precondition inside the `WHERE` clause of a single
 `UPDATE`, and reads the affected-row count to discover whether it won.
 
 ```sql
@@ -114,17 +130,18 @@ shop while selling nothing. Two carts may contain the same jacket; whoever
 reaches checkout first gets it, and the other is told at checkout rather than
 after paying.
 
-## If the shop ever sells bulk stock
+## Bulk stock
 
-One product with many sizes and a quantity is the ordinary e-commerce model, and
-it is deliberately not this one — it would replace the problem described above
-with arithmetic. The reasoning, and what the migration would cost if the business
-ever changes shape, is in [product-variants.md](product-variants.md).
+It came: shops visited in Nairobi sell one style in many sizes and colours. The
+problem did not become arithmetic after all — "the last unit of Khaki 32" is
+exactly the one-of-one race, so the mechanism generalised rather than went away.
+The design is in [product-variants.md](product-variants.md).
 
 ## Where this lives
 
 |                                                 |                                                |
 | ----------------------------------------------- | ---------------------------------------------- |
 | `src/lib/shop/reservations.ts`                  | reserve, release, extend, confirm, sweep       |
+| `src/lib/shop/availability.ts`                  | free units, per-line cap, product state        |
 | `src/lib/shop/reservations.integration.test.ts` | including the naive comparison                 |
-| `prisma/schema.prisma`                          | `ProductStatus`, `reservedUntil`, `reservedBy` |
+| `prisma/schema.prisma`                          | `ProductVariant`, `StockHold`, `StockMovement` |

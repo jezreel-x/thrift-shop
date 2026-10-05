@@ -1,4 +1,5 @@
 import { Category, Condition, Gender } from "@/generated/prisma/enums";
+import { normaliseCategorySlug } from "@/lib/shop/categories";
 import { db } from "./db";
 
 /**
@@ -18,6 +19,7 @@ export async function makeProduct(
 ) {
   sequence += 1;
   const option2 = variant.option2 === undefined ? "M" : variant.option2;
+  const category = (overrides.category as Category | undefined) ?? Category.HOODIES;
 
   const product = await db.product.create({
     data: {
@@ -30,6 +32,8 @@ export async function makeProduct(
       condition: Condition.GOOD,
       gender: Gender.UNISEX,
       ...overrides,
+      // Linked to its row, as the migration links real products.
+      categoryId: await categoryIdFor(category),
     },
   });
 
@@ -48,4 +52,13 @@ export async function makeProduct(
 /** Units of a variant still on the shelf. */
 export async function stockOf(variantId: string): Promise<number> {
   return (await db.productVariant.findUniqueOrThrow({ where: { id: variantId } })).stock;
+}
+
+/** The category row the migration created for an old enum value. */
+export async function categoryIdFor(category: Category): Promise<string> {
+  const row = await db.productCategory.findUniqueOrThrow({
+    where: { slug: normaliseCategorySlug(category) },
+  });
+
+  return row.id;
 }

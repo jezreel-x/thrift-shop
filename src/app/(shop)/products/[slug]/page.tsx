@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { AddToCart } from "@/components/add-to-cart";
 import { ProductGallery } from "@/components/product-gallery";
-import { CATEGORY_LABELS, CONDITION_LABELS, GENDER_LABELS } from "@/lib/shop/catalogue";
+import { CONDITION_LABELS, GENDER_LABELS } from "@/lib/shop/catalogue";
 import { formatPrice } from "@/lib/money";
 import { readCart } from "@/lib/shop/cart-session";
 import { buildProductQuery } from "@/lib/shop/product-search-params";
@@ -22,7 +22,7 @@ export async function generateMetadata({
 
   const description =
     product.description ??
-    `${CONDITION_LABELS[product.condition]} condition` +
+    `${product.condition ? `${CONDITION_LABELS[product.condition]} condition` : product.title}` +
       `${product.variants[0]?.option2 ? `, size ${product.variants[0].option2}` : ""}. ` +
       `${formatPrice(product.priceCents)}. One of one — when it is gone, it is gone.`;
 
@@ -104,9 +104,13 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
 
           <dl className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-neutral-200 pt-6 text-sm dark:border-neutral-800">
             {sizes.length > 0 && <Fact label="Size" value={sizes.join(", ")} />}
-            <Fact label="Condition" value={CONDITION_LABELS[product.condition]} />
-            <Fact label="Category" value={CATEGORY_LABELS[product.category]} />
-            <Fact label="Fit" value={GENDER_LABELS[product.gender]} />
+            {product.condition && product.categoryRef?.showCondition !== false && (
+              <Fact label="Condition" value={CONDITION_LABELS[product.condition]} />
+            )}
+            {product.categoryRef && <Fact label="Category" value={product.categoryRef.name} />}
+            {product.gender && product.categoryRef?.showFit !== false && (
+              <Fact label="Fit" value={GENDER_LABELS[product.gender]} />
+            )}
             {product.brand && <Fact label="Brand" value={product.brand} />}
           </dl>
 
@@ -116,10 +120,12 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
                 This piece has sold. Every item here is one of one, so it will not be restocked —
                 but{" "}
                 <Link
-                  href={buildProductQuery({ filters: { categories: [product.category] } })}
+                  href={buildProductQuery({
+                    filters: product.categoryRef ? { categories: [product.categoryRef.slug] } : {},
+                  })}
                   className="underline underline-offset-4"
                 >
-                  similar {CATEGORY_LABELS[product.category].toLowerCase()}
+                  similar {(product.categoryRef?.name ?? "pieces").toLowerCase()}
                 </Link>{" "}
                 may be available.
               </p>

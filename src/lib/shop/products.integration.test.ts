@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
+import { categoryIdFor } from "@/test/catalogue";
 import { db, cleanDatabaseBetweenTests } from "@/test/db";
 import { PAGE_SIZE, getProductBySlug, listProducts, listSitemapEntries } from "./products";
 
@@ -16,7 +18,8 @@ let sequence = 0;
  * happened to be written in the right order is a test that proves nothing.
  */
 async function makeProduct(
-  overrides: Partial<Parameters<typeof db.product.create>[0]["data"]> = {},
+  // The unchecked form: fields by id (categoryId), as the helper links them.
+  overrides: Partial<Prisma.ProductUncheckedCreateInput> = {},
 ) {
   sequence += 1;
   // Written the old way for readability — a size and a status — and turned into
@@ -35,6 +38,7 @@ async function makeProduct(
       gender: Gender.UNISEX,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       ...data,
+      categoryId: await categoryIdFor((data.category as Category | undefined) ?? Category.T_SHIRTS),
     },
   });
 
@@ -154,7 +158,7 @@ describe("listProducts — filters", () => {
   });
 
   it("filters by category and by condition", async () => {
-    const byCategory = await listProducts({ filters: { categories: [Category.T_SHIRTS] } });
+    const byCategory = await listProducts({ filters: { categories: ["t-shirts"] } });
     expect(byCategory.items.map((item) => item.slug)).toEqual(["black-tee-m"]);
 
     const byCondition = await listProducts({ filters: { conditions: [Condition.FAIR] } });
@@ -365,5 +369,58 @@ describe("listSitemapEntries", () => {
 
     expect(entry.updatedAt).toBeInstanceOf(Date);
     expect(entry.updatedAt.getTime()).toBe(product.updatedAt.getTime());
+  });
+});
+
+describe("categories as data", () => {
+  it("filters by a category's slug, and offers its name", async () => {
+    await makeProduct({ slug: "a-hoodie", category: Category.HOODIES });
+    await makeProduct({ slug: "a-tee", category: Category.T_SHIRTS });
+
+    const { items } = await listProducts({ filters: { categories: ["hoodies"] } });
+
+    expect(items.map((item) => item.slug)).toEqual(["a-hoodie"]);
+    expect(items[0].categoryRef?.name).toBe("Hoodies");
+  });
+
+  it("serves a new kind of stock without any code change", async () => {
+    // Rings: option 1 "Metal", option 2 "Ring size", no Condition or Fit.
+    const rings = await db.productCategory.create({
+      data: {
+        slug: "rings-test",
+        name: "Rings",
+        option1Name: "Metal",
+        option2Name: "Ring size",
+        option2Values: ["6", "7", "8"],
+        showCondition: false,
+        showFit: false,
+      },
+    });
+    try {
+      const ring = await db.product.create({
+        data: {
+          slug: "twist-band-ring",
+          title: "Twist Band Ring",
+          priceCents: 250_000,
+          size: "7",
+          category: Category.HOODIES, // the old column, still required until the contract step
+          categoryId: rings.id,
+        },
+      });
+      await db.productVariant.create({ data: { productId: ring.id, option2: "7", stock: 2 } });
+
+      const { items } = await listProducts({
+        filters: { categories: ["rings-test"], sizes: ["7"] },
+      });
+      expect(items.map((item) => item.slug)).toEqual(["twist-band-ring"]);
+      expect(items[0].condition).toBeNull();
+
+      const page = await getProductBySlug("twist-band-ring");
+      expect(page?.categoryRef).toMatchObject({ option2Name: "Ring size", showFit: false });
+    } finally {
+      // Categories are reference data the per-test reset leaves alone.
+      await db.product.deleteMany({ where: { categoryId: rings.id } });
+      await db.productCategory.delete({ where: { id: rings.id } });
+    }
   });
 });

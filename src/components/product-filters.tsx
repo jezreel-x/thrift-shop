@@ -1,15 +1,7 @@
 import Link from "next/link";
 
-import { Category, Condition, Gender } from "@/generated/prisma/enums";
-import {
-  CATEGORIES,
-  CATEGORY_LABELS,
-  CONDITIONS,
-  CONDITION_LABELS,
-  GENDERS,
-  GENDER_LABELS,
-  allSizes,
-} from "@/lib/shop/catalogue";
+import { Condition, Gender } from "@/generated/prisma/enums";
+import { CONDITIONS, CONDITION_LABELS, GENDERS, GENDER_LABELS } from "@/lib/shop/catalogue";
 import { PARAM, SORTS, SORT_LABELS, hasActiveFilters } from "@/lib/shop/product-search-params";
 import type { ProductQuery } from "@/lib/shop/product-search-params";
 
@@ -25,7 +17,17 @@ import type { ProductQuery } from "@/lib/shop/product-search-params";
  * connection that is arguably the better trade anyway: one round trip instead of
  * one per checkbox.
  */
-export function ProductFilters({ query }: { query: ProductQuery }) {
+export function ProductFilters({
+  query,
+  categories,
+  sizes,
+}: {
+  query: ProductQuery;
+  /** From the database, in the shop's order. */
+  categories: { slug: string; name: string }[];
+  /** Every size the categories offer, in order. */
+  sizes: string[];
+}) {
   const active = hasActiveFilters(query.filters);
 
   return (
@@ -36,13 +38,13 @@ export function ProductFilters({ query }: { query: ProductQuery }) {
           Filters{active ? " · on" : ""}
         </summary>
         <div className="mt-4">
-          <FilterForm query={query} idPrefix="m" />
+          <FilterForm query={query} categories={categories} sizes={sizes} idPrefix="m" />
         </div>
       </details>
 
       {/* Wider screens: always visible, beside the grid. */}
       <div className="hidden lg:block">
-        <FilterForm query={query} idPrefix="d" />
+        <FilterForm query={query} categories={categories} sizes={sizes} idPrefix="d" />
       </div>
     </>
   );
@@ -53,7 +55,17 @@ export function ProductFilters({ query }: { query: ProductQuery }) {
  * breakpoint — and duplicate element ids would break every label's association
  * with its checkbox, which is what makes the label tappable.
  */
-function FilterForm({ query, idPrefix }: { query: ProductQuery; idPrefix: string }) {
+function FilterForm({
+  query,
+  categories,
+  sizes,
+  idPrefix,
+}: {
+  query: ProductQuery;
+  categories: { slug: string; name: string }[];
+  sizes: string[];
+  idPrefix: string;
+}) {
   const { filters, sort } = query;
   const active = hasActiveFilters(filters);
 
@@ -84,7 +96,7 @@ function FilterForm({ query, idPrefix }: { query: ProductQuery; idPrefix: string
         legend="Size"
         name={PARAM.size}
         idPrefix={idPrefix}
-        options={allSizes().map((size) => ({ value: size, label: size }))}
+        options={sizes.map((size) => ({ value: size, label: size }))}
         selected={filters.sizes ?? []}
         inline
       />
@@ -93,10 +105,7 @@ function FilterForm({ query, idPrefix }: { query: ProductQuery; idPrefix: string
         legend="Category"
         name={PARAM.category}
         idPrefix={idPrefix}
-        options={CATEGORIES.map((category) => ({
-          value: category,
-          label: CATEGORY_LABELS[category as Category],
-        }))}
+        options={categories.map((category) => ({ value: category.slug, label: category.name }))}
         selected={filters.categories ?? []}
       />
 

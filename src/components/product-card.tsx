@@ -67,8 +67,14 @@ export function ProductCard({
 
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
           {product.brand ? `${product.brand} · ` : ""}
-          {product.sizes.length > 0 ? `${product.sizes.join(", ")} · ` : ""}
-          {CONDITION_LABELS[product.condition]}
+          {[
+            product.sizes.join(", "),
+            product.condition && product.categoryRef?.showCondition !== false
+              ? CONDITION_LABELS[product.condition]
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
 
         <p

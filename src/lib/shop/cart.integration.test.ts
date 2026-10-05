@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
+import { makeProduct } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import {
   addToCart,
@@ -11,33 +11,11 @@ import {
   mergeAnonymousCart,
   removeFromCart,
   resolveCart,
+  setCartQuantity,
 } from "./cart";
-import { reserveProduct } from "./reservations";
+import { reserveVariant } from "./reservations";
 
 cleanDatabaseBetweenTests();
-
-let sequence = 0;
-
-beforeEach(() => {
-  sequence = 0;
-});
-
-async function makeProduct(overrides: Record<string, unknown> = {}) {
-  sequence += 1;
-
-  return db.product.create({
-    data: {
-      slug: `product-${sequence}`,
-      title: `Product ${sequence}`,
-      priceCents: 100_000,
-      size: "M",
-      category: Category.HOODIES,
-      condition: Condition.GOOD,
-      gender: Gender.UNISEX,
-      ...overrides,
-    },
-  });
-}
 
 async function makeUser(email = "grace@example.com") {
   return db.user.create({
@@ -89,30 +67,42 @@ describe("addToCart", () => {
     const product = await makeProduct();
     const cart = await resolveCart({});
 
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
 
     const { lines } = await getCartContents(cart.id);
     expect(lines.map((line) => line.productId)).toEqual([product.id]);
   });
 
-  it("is idempotent — stock is one of one, so there is no second copy to add", async () => {
-    const product = await makeProduct();
+  it("adding a variant again raises its quantity on the same line", async () => {
+    const product = await makeProduct({}, { stock: 5 });
     const cart = await resolveCart({});
 
-    await addToCart(cart.id, product.id);
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
+    await addToCart(cart.id, product.variantId, 2);
 
-    expect((await getCartContents(cart.id)).lines).toHaveLength(1);
+    const { lines } = await getCartContents(cart.id);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].quantity).toBe(3);
+  });
+
+  it("never puts more than five on a line", async () => {
+    const product = await makeProduct({}, { stock: 20 });
+    const cart = await resolveCart({});
+
+    await addToCart(cart.id, product.variantId, 4);
+    await addToCart(cart.id, product.variantId, 4);
+
+    expect((await getCartContents(cart.id)).lines[0].quantity).toBe(5);
   });
 
   it("accepts an item somebody else is currently checking out with", async () => {
     // That hold may lapse. Refusing here would make the cart wrong for fifteen
     // minutes on the strength of a purchase that might never complete.
     const product = await makeProduct();
-    await reserveProduct(product.id, "another-shopper");
+    await reserveVariant(product.variantId, "another-shopper");
     const cart = await resolveCart({});
 
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
 
     expect((await getCartContents(cart.id)).lines).toHaveLength(1);
   });
@@ -121,7 +111,7 @@ describe("addToCart", () => {
     const product = await makeProduct({ deletedAt: new Date() });
     const cart = await resolveCart({});
 
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
 
     expect((await getCartContents(cart.id)).lines).toHaveLength(0);
   });
@@ -131,10 +121,10 @@ describe("removeFromCart and clearCart", () => {
   it("removes one item and leaves the rest", async () => {
     const [a, b] = [await makeProduct(), await makeProduct()];
     const cart = await resolveCart({});
-    await addToCart(cart.id, a.id);
-    await addToCart(cart.id, b.id);
+    await addToCart(cart.id, a.variantId);
+    await addToCart(cart.id, b.variantId);
 
-    await removeFromCart(cart.id, a.id);
+    await removeFromCart(cart.id, a.variantId);
 
     expect((await getCartContents(cart.id)).lines.map((l) => l.productId)).toEqual([b.id]);
   });
@@ -142,7 +132,7 @@ describe("removeFromCart and clearCart", () => {
   it("empties the cart", async () => {
     const product = await makeProduct();
     const cart = await resolveCart({});
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
 
     await clearCart(cart.id);
 
@@ -159,10 +149,10 @@ describe("removeFromCart and clearCart", () => {
 describe("getCartContents — availability", () => {
   it("marks a sold item unavailable and excludes it from the total", async () => {
     const available = await makeProduct({ priceCents: 200_000 });
-    const sold = await makeProduct({ priceCents: 500_000, status: ProductStatus.SOLD });
+    const sold = await makeProduct({ priceCents: 500_000 }, { stock: 0 });
     const cart = await resolveCart({});
-    await addToCart(cart.id, available.id);
-    await addToCart(cart.id, sold.id);
+    await addToCart(cart.id, available.variantId);
+    await addToCart(cart.id, sold.variantId);
 
     const contents = await getCartContents(cart.id);
 
@@ -177,8 +167,8 @@ describe("getCartContents — availability", () => {
   it("marks an item held by somebody else as held", async () => {
     const product = await makeProduct();
     const cart = await resolveCart({});
-    await addToCart(cart.id, product.id);
-    await reserveProduct(product.id, "another-shopper");
+    await addToCart(cart.id, product.variantId);
+    await reserveVariant(product.variantId, "another-shopper");
 
     const [line] = (await getCartContents(cart.id, "me")).lines;
 
@@ -190,8 +180,8 @@ describe("getCartContents — availability", () => {
     // somebody else's, and the item you are buying looks gone.
     const product = await makeProduct();
     const cart = await resolveCart({});
-    await addToCart(cart.id, product.id);
-    await reserveProduct(product.id, "me");
+    await addToCart(cart.id, product.variantId);
+    await reserveVariant(product.variantId, "me");
 
     const [line] = (await getCartContents(cart.id, "me")).lines;
 
@@ -199,13 +189,17 @@ describe("getCartContents — availability", () => {
   });
 
   it("treats a lapsed hold as available, matching what checkout would grant", async () => {
-    const product = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "someone",
-      reservedUntil: new Date(Date.now() - 60_000),
+    const product = await makeProduct();
+    await db.stockHold.create({
+      data: {
+        variantId: product.variantId,
+        holder: "someone",
+        quantity: 1,
+        expiresAt: new Date(Date.now() - 60_000),
+      },
     });
     const cart = await resolveCart({});
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
 
     const [line] = (await getCartContents(cart.id, "me")).lines;
 
@@ -215,7 +209,7 @@ describe("getCartContents — availability", () => {
   it("marks a withdrawn item, rather than dropping it without explanation", async () => {
     const product = await makeProduct();
     const cart = await resolveCart({});
-    await addToCart(cart.id, product.id);
+    await addToCart(cart.id, product.variantId);
     await db.product.update({ where: { id: product.id }, data: { deletedAt: new Date() } });
 
     const [line] = (await getCartContents(cart.id)).lines;
@@ -238,8 +232,8 @@ describe("getCartContents — availability", () => {
       },
     });
     const cart = await resolveCart({});
-    await addToCart(cart.id, withPhoto.id);
-    await addToCart(cart.id, withoutPhoto.id);
+    await addToCart(cart.id, withPhoto.variantId);
+    await addToCart(cart.id, withoutPhoto.variantId);
 
     const { lines } = await getCartContents(cart.id);
 
@@ -259,7 +253,7 @@ describe("mergeAnonymousCart", () => {
     const product = await makeProduct();
     const user = await makeUser();
     const anonymous = await resolveCart({});
-    await addToCart(anonymous.id, product.id);
+    await addToCart(anonymous.id, product.variantId);
 
     await mergeAnonymousCart(anonymous.id, user.id);
 
@@ -272,10 +266,10 @@ describe("mergeAnonymousCart", () => {
     const [saved, added] = [await makeProduct(), await makeProduct()];
     const user = await makeUser();
     const theirs = await resolveCart({ userId: user.id });
-    await addToCart(theirs.id, saved.id);
+    await addToCart(theirs.id, saved.variantId);
 
     const anonymous = await resolveCart({});
-    await addToCart(anonymous.id, added.id);
+    await addToCart(anonymous.id, added.variantId);
 
     await mergeAnonymousCart(anonymous.id, user.id);
 
@@ -288,10 +282,10 @@ describe("mergeAnonymousCart", () => {
     const product = await makeProduct();
     const user = await makeUser();
     const theirs = await resolveCart({ userId: user.id });
-    await addToCart(theirs.id, product.id);
+    await addToCart(theirs.id, product.variantId);
 
     const anonymous = await resolveCart({});
-    await addToCart(anonymous.id, product.id);
+    await addToCart(anonymous.id, product.variantId);
 
     await mergeAnonymousCart(anonymous.id, user.id);
 
@@ -341,5 +335,65 @@ describe("deleteAbandonedAnonymousCarts", () => {
     expect(await db.cart.findUnique({ where: { id: stale.id } })).toBeNull();
     expect(await db.cart.findUnique({ where: { id: fresh.id } })).not.toBeNull();
     expect(await db.cart.findUnique({ where: { id: mine.id } })).not.toBeNull();
+  });
+});
+
+describe("quantities against stock", () => {
+  it("offers at most what is free, capped at five", async () => {
+    const plenty = await makeProduct({}, { stock: 9 });
+    const few = await makeProduct({}, { stock: 2 });
+    const cart = await resolveCart({});
+    await addToCart(cart.id, plenty.variantId);
+    await addToCart(cart.id, few.variantId);
+
+    const { lines } = await getCartContents(cart.id);
+
+    expect(lines.find((l) => l.variantId === plenty.variantId)?.maxQuantity).toBe(5);
+    expect(lines.find((l) => l.variantId === few.variantId)?.maxQuantity).toBe(2);
+  });
+
+  it("says when stock has fallen below what is in the cart, and totals only what is free", async () => {
+    const product = await makeProduct({ priceCents: 100_000 }, { stock: 3 });
+    const cart = await resolveCart({});
+    await addToCart(cart.id, product.variantId, 3);
+    await reserveVariant(product.variantId, "someone-else", 2);
+
+    const contents = await getCartContents(cart.id, "me");
+
+    expect(contents.lines[0]).toMatchObject({ quantity: 3, quantityAvailable: 1, maxQuantity: 1 });
+    expect(contents.totalCents).toBe(100_000);
+  });
+
+  it("uses the variant's own price when it has one", async () => {
+    const product = await makeProduct({ priceCents: 100_000 }, { stock: 2, priceCents: 160_000 });
+    const cart = await resolveCart({});
+    await addToCart(cart.id, product.variantId, 2);
+
+    const contents = await getCartContents(cart.id);
+
+    expect(contents.lines[0].priceCents).toBe(160_000);
+    expect(contents.totalCents).toBe(320_000);
+  });
+
+  it("sets and clears a line's quantity for the steppers", async () => {
+    const product = await makeProduct({}, { stock: 9 });
+    const cart = await resolveCart({});
+    await addToCart(cart.id, product.variantId);
+
+    await setCartQuantity(cart.id, product.variantId, 4);
+    expect((await getCartContents(cart.id)).lines[0].quantity).toBe(4);
+
+    await setCartQuantity(cart.id, product.variantId, 0);
+    expect((await getCartContents(cart.id)).lines).toHaveLength(0);
+  });
+
+  it("refuses a sixth unit at the database, whatever the code does", async () => {
+    const product = await makeProduct({}, { stock: 9 });
+    const cart = await resolveCart({});
+    await addToCart(cart.id, product.variantId);
+
+    await expect(
+      db.cartItem.updateMany({ where: { cartId: cart.id }, data: { quantity: 6 } }),
+    ).rejects.toThrow();
   });
 });

@@ -3,7 +3,8 @@ import { randomInt } from "node:crypto";
 import { OrderStatus } from "@/generated/prisma/enums";
 import { getCartContents } from "./cart";
 import { prisma } from "../prisma";
-import { holdForPaymentReview, reserveProduct } from "./reservations";
+import type { CartLine } from "./cart";
+import { holdForPaymentReview, reserveVariant } from "./reservations";
 
 /**
  * Orders.
@@ -32,6 +33,8 @@ export type CheckoutResult =
       reference: string;
       /** Items that could not be reserved, so checkout can say what dropped out. */
       droppedTitles: string[];
+      /** Lines held in part, because fewer were free than were asked for. */
+      reduced: { title: string; requested: number; held: number }[];
     }
   | { ok: false; reason: CheckoutRefusal };
 
@@ -57,21 +60,31 @@ export async function beginCheckout(
 
   if (cart.lines.length === 0) return { ok: false, reason: "empty-cart" };
 
-  // Reserve first, then record. An item that cannot be held has no business on
-  // an order, and reserving is the only way to find out.
-  const held: typeof cart.lines = [];
-  const dropped: typeof cart.lines = [];
+  // Reserve first, then record. Units that cannot be held have no business on
+  // an order, and reserving is the only way to find out. Each line asks for its
+  // quantity and may be given fewer, which the buyer is told before paying.
+  const held: (CartLine & { quantity: number })[] = [];
+  const dropped: CartLine[] = [];
+  const reduced: { title: string; requested: number; held: number }[] = [];
 
   for (const line of cart.lines) {
-    const result = await reserveProduct(line.productId, userId);
-    (result.ok ? held : dropped).push(line);
+    const result = await reserveVariant(line.variantId, userId, line.quantity);
+    if (!result.ok) {
+      dropped.push(line);
+      continue;
+    }
+
+    held.push({ ...line, quantity: result.quantity });
+    if (result.quantity < line.quantity) {
+      reduced.push({ title: line.title, requested: line.quantity, held: result.quantity });
+    }
   }
 
   if (held.length === 0) {
     return { ok: false, reason: "nothing-available" };
   }
 
-  const totalCents = held.reduce((sum, line) => sum + line.priceCents, 0);
+  const totalCents = held.reduce((sum, line) => sum + line.priceCents * line.quantity, 0);
 
   const order = await prisma.$transaction(async (tx) => {
     const open = await tx.order.findFirst({
@@ -115,6 +128,7 @@ export async function beginCheckout(
     orderId: order.id,
     reference: order.reference,
     droppedTitles: dropped.map((line) => line.title),
+    reduced,
   };
 }
 
@@ -137,7 +151,7 @@ export async function claimPayment(
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
-    select: { id: true, reference: true, status: true, items: { select: { productId: true } } },
+    select: { id: true, reference: true, status: true, items: { select: { variantId: true } } },
   });
 
   if (!order) return { ok: false, reason: "not-found" };
@@ -149,7 +163,7 @@ export async function claimPayment(
   // as the buyer is concerned, and fifteen minutes is nowhere near long enough
   // for a person to read their messages.
   for (const item of order.items) {
-    const extended = await holdForPaymentReview(item.productId, userId);
+    const extended = item.variantId ? await holdForPaymentReview(item.variantId, userId) : false;
     if (!extended) return { ok: false, reason: "hold-lapsed" };
   }
 
@@ -204,12 +218,16 @@ export async function listOrders(userId: string) {
   });
 }
 
-function toOrderItem(line: { productId: string; title: string; size: string; priceCents: number }) {
+/** The order line: a snapshot of what was agreed, so later edits never rewrite it. */
+function toOrderItem(line: CartLine & { quantity: number }) {
   return {
     productId: line.productId,
+    variantId: line.variantId,
     title: line.title,
+    swatch: line.swatch,
     size: line.size,
     priceCents: line.priceCents,
+    quantity: line.quantity,
   };
 }
 

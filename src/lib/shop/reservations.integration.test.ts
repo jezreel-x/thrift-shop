@@ -1,468 +1,400 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
+import { makeProduct, stockOf } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import {
   PAYMENT_REVIEW_HOURS,
   RESERVATION_MINUTES,
   confirmSale,
-  releaseHoldIn,
+  getAvailability,
   holdForPaymentReview,
   releaseExpiredReservations,
+  releaseHoldIn,
   releaseReservation,
-  reserveProduct,
+  reserveVariant,
 } from "./reservations";
 
 cleanDatabaseBetweenTests();
 
-let sequence = 0;
-
-beforeEach(() => {
-  sequence = 0;
-});
-
-async function makeProduct(overrides: Record<string, unknown> = {}) {
-  sequence += 1;
-
-  return db.product.create({
-    data: {
-      slug: `product-${sequence}`,
-      title: `Product ${sequence}`,
-      priceCents: 150_000,
-      size: "M",
-      category: Category.HOODIES,
-      condition: Condition.GOOD,
-      gender: Gender.UNISEX,
-      ...overrides,
-    },
-  });
-}
-
 const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+
+const holdOf = (variantId: string, holder: string) =>
+  db.stockHold.findUnique({ where: { variantId_holder: { variantId, holder } } });
+
+/** Lets an existing hold lapse, as if its fifteen minutes had passed. */
+const lapse = (variantId: string, holder: string) =>
+  db.stockHold.update({
+    where: { variantId_holder: { variantId, holder } },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
 
 describe("two buyers, one jacket", () => {
   it("lets exactly one of two simultaneous buyers reserve it", async () => {
-    const product = await makeProduct();
+    const { variantId } = await makeProduct();
 
     const [first, second] = await Promise.all([
-      reserveProduct(product.id, "buyer-a"),
-      reserveProduct(product.id, "buyer-b"),
+      reserveVariant(variantId, "buyer-a"),
+      reserveVariant(variantId, "buyer-b"),
     ]);
 
     expect([first.ok, second.ok].filter(Boolean)).toHaveLength(1);
 
     const loser = first.ok ? second : first;
-    expect(loser.ok).toBe(false);
-    if (!loser.ok) expect(loser.reason).toBe("held");
+    expect(loser).toEqual({ ok: false, reason: "held" });
   });
 
   it("lets exactly one of twenty simultaneous buyers reserve it", async () => {
-    // Twenty genuinely parallel attempts across the connection pool. This is the
-    // test that would fail against a read-then-write: several would read
-    // AVAILABLE before any of them wrote, and every one of them would believe it
-    // had won.
-    const product = await makeProduct();
+    // Twenty genuinely parallel attempts across the connection pool: the case
+    // a one-of-one shop exists to get right.
+    const { variantId } = await makeProduct();
 
     const results = await Promise.all(
-      Array.from({ length: 20 }, (_, index) => reserveProduct(product.id, `buyer-${index}`)),
+      Array.from({ length: 20 }, (_, index) => reserveVariant(variantId, `buyer-${index}`)),
     );
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
-    expect(results.filter((result) => !result.ok)).toHaveLength(19);
+    expect(await db.stockHold.count()).toBe(1);
   });
 
-  it("records the winner as the holder, and nobody else", async () => {
-    const product = await makeProduct();
+  it("leaves stock alone: a hold is counted against it, never subtracted from it", async () => {
+    const { variantId } = await makeProduct();
 
-    const results = await Promise.all(
-      Array.from({ length: 10 }, (_, index) => reserveProduct(product.id, `buyer-${index}`)),
-    );
-    const winnerIndex = results.findIndex((result) => result.ok);
+    await reserveVariant(variantId, "buyer");
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.status).toBe(ProductStatus.RESERVED);
-    expect(stored.reservedBy).toBe(`buyer-${winnerIndex}`);
-  });
-
-  it("writes exactly one status-history row, however many buyers raced", async () => {
-    // The losing attempts must leave no trace: a history full of failed claims
-    // would make the audit trail useless for the disputes it exists to settle.
-    const product = await makeProduct();
-
-    await Promise.all(
-      Array.from({ length: 10 }, (_, index) => reserveProduct(product.id, `buyer-${index}`)),
-    );
-
-    const history = await db.productStatusHistory.findMany({ where: { productId: product.id } });
-    expect(history).toHaveLength(1);
-    expect(history[0].toStatus).toBe(ProductStatus.RESERVED);
-    expect(history[0].fromStatus).toBe(ProductStatus.AVAILABLE);
+    expect(await stockOf(variantId)).toBe(1);
   });
 });
 
-describe("reserveProduct", () => {
-  it("holds the item for the configured window", async () => {
-    const product = await makeProduct();
-    const before = Date.now();
+describe("twenty buyers, three units", () => {
+  it("lets exactly three of twenty simultaneous buyers hold one each", async () => {
+    const { variantId } = await makeProduct({}, { stock: 3 });
 
-    const result = await reserveProduct(product.id, "buyer");
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, index) => reserveVariant(variantId, `buyer-${index}`)),
+    );
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const heldFor = (result.reservedUntil.getTime() - before) / 60_000;
-    expect(heldFor).toBeGreaterThan(RESERVATION_MINUTES - 1);
-    expect(heldFor).toBeLessThanOrEqual(RESERVATION_MINUTES);
+    expect(results.filter((result) => result.ok)).toHaveLength(3);
+    const { _sum } = await db.stockHold.aggregate({ _sum: { quantity: true } });
+    expect(_sum.quantity).toBe(3);
   });
 
-  it("refuses a sold item, and says so", async () => {
-    const product = await makeProduct({ status: ProductStatus.SOLD });
+  it("never holds more than the stock, however large the requests interleave", async () => {
+    const { variantId } = await makeProduct({}, { stock: 3 });
 
-    const result = await reserveProduct(product.id, "buyer");
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) => reserveVariant(variantId, `buyer-${index}`, 2)),
+    );
 
-    expect(result).toEqual({ ok: false, reason: "sold" });
+    const held = results.reduce((sum, result) => sum + (result.ok ? result.quantity : 0), 0);
+    expect(held).toBe(3);
+  });
+});
+
+describe("reserveVariant", () => {
+  it("holds the units for the configured window", async () => {
+    const { variantId } = await makeProduct({}, { stock: 4 });
+
+    const result = await reserveVariant(variantId, "buyer", 2);
+
+    expect(result.ok && result.quantity).toBe(2);
+    const hold = await holdOf(variantId, "buyer");
+    expect(hold?.quantity).toBe(2);
+    const minutes = ((hold?.expiresAt.getTime() ?? 0) - Date.now()) / 60_000;
+    expect(minutes).toBeGreaterThan(RESERVATION_MINUTES - 0.1);
+    expect(minutes).toBeLessThanOrEqual(RESERVATION_MINUTES);
   });
 
-  it("refuses a withdrawn item", async () => {
-    const product = await makeProduct({ deletedAt: new Date() });
+  it("holds fewer when fewer are free, and says how many", async () => {
+    const { variantId } = await makeProduct({}, { stock: 3 });
+    await reserveVariant(variantId, "first", 2);
 
-    const result = await reserveProduct(product.id, "buyer");
+    const result = await reserveVariant(variantId, "second", 2);
 
-    expect(result).toEqual({ ok: false, reason: "gone" });
+    expect(result.ok && result.quantity).toBe(1);
   });
 
-  it("refuses an item that does not exist", async () => {
-    const result = await reserveProduct("no-such-id", "buyer");
+  it("refuses a sold-out variant, and says so", async () => {
+    const { variantId } = await makeProduct({}, { stock: 0 });
 
-    expect(result).toEqual({ ok: false, reason: "gone" });
+    expect(await reserveVariant(variantId, "buyer")).toEqual({ ok: false, reason: "sold" });
   });
 
-  it("treats a lapsed hold as available, without waiting for the sweep", async () => {
-    // The sweep keeps the catalogue honest; it is not what makes this correct.
-    const product = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "buyer-a",
-      reservedUntil: minutesFromNow(-1),
-    });
+  it("refuses a withdrawn product", async () => {
+    const { variantId } = await makeProduct({ deletedAt: new Date() });
 
-    const result = await reserveProduct(product.id, "buyer-b");
+    expect(await reserveVariant(variantId, "buyer")).toEqual({ ok: false, reason: "gone" });
+  });
 
-    expect(result.ok).toBe(true);
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.reservedBy).toBe("buyer-b");
+  it("refuses a variant that does not exist", async () => {
+    expect(await reserveVariant("missing", "buyer")).toEqual({ ok: false, reason: "gone" });
+  });
+
+  it("treats a lapsed hold as free, without waiting for the sweep", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "first");
+    await lapse(variantId, "first");
+
+    expect((await reserveVariant(variantId, "second")).ok).toBe(true);
   });
 
   it("lets the same buyer extend their own hold, so a page refresh does not lose it", async () => {
-    const product = await makeProduct();
-    const first = await reserveProduct(product.id, "buyer");
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
 
-    const second = await reserveProduct(product.id, "buyer", new Date(Date.now() + 60_000));
+    const again = await reserveVariant(variantId, "buyer");
 
-    expect(second.ok).toBe(true);
-    if (!first.ok || !second.ok) return;
-    expect(second.reservedUntil.getTime()).toBeGreaterThan(first.reservedUntil.getTime());
+    expect(again.ok).toBe(true);
+    expect(await db.stockHold.count()).toBe(1);
   });
 
-  it("does not log an extension as a transition", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
-    await reserveProduct(product.id, "buyer");
-    await reserveProduct(product.id, "buyer");
+  it("asks for at least one, whatever it is passed", async () => {
+    const { variantId } = await makeProduct({}, { stock: 2 });
 
-    const history = await db.productStatusHistory.findMany({ where: { productId: product.id } });
-    expect(history).toHaveLength(1);
+    const result = await reserveVariant(variantId, "buyer", 0);
+
+    expect(result.ok && result.quantity).toBe(1);
   });
 });
 
 describe("releaseReservation", () => {
-  it("returns an abandoned item to the catalogue", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
+  it("frees an abandoned hold for the next buyer", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer-a");
 
-    expect(await releaseReservation(product.id, "buyer")).toBe(true);
+    expect(await releaseReservation(variantId, "buyer-a")).toBe(true);
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.status).toBe(ProductStatus.AVAILABLE);
-    expect(stored.reservedBy).toBeNull();
-    expect(stored.reservedUntil).toBeNull();
+    expect((await reserveVariant(variantId, "buyer-b")).ok).toBe(true);
   });
 
   it("refuses to release somebody else's hold", async () => {
-    // Otherwise anyone could knock an item out of a stranger's checkout.
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer-a");
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "owner-of-hold");
 
-    expect(await releaseReservation(product.id, "buyer-b")).toBe(false);
-
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.reservedBy).toBe("buyer-a");
+    expect(await releaseReservation(variantId, "stranger")).toBe(false);
+    expect(await holdOf(variantId, "owner-of-hold")).not.toBeNull();
   });
 });
 
 describe("confirmSale", () => {
-  it("completes a live reservation", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
+  it("takes the held units out of stock, ends the hold, and records it in the ledger", async () => {
+    const { variantId } = await makeProduct({}, { stock: 5 });
+    await reserveVariant(variantId, "buyer", 2);
 
-    expect(await confirmSale(product.id, "buyer")).toBe(true);
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 2, orderId: "order-1" })).toBe(
+      true,
+    );
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.status).toBe(ProductStatus.SOLD);
-    expect(stored.reservedBy).toBeNull();
+    expect(await stockOf(variantId)).toBe(3);
+    expect(await holdOf(variantId, "buyer")).toBeNull();
+    const [movement] = await db.stockMovement.findMany({ where: { variantId } });
+    expect(movement).toMatchObject({ change: -2, reason: "sale confirmed", orderId: "order-1" });
   });
 
-  it("refuses to complete somebody else's reservation", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer-a");
+  it("refuses to sell somebody else's hold", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
 
-    expect(await confirmSale(product.id, "buyer-b")).toBe(false);
+    expect(await confirmSale({ variantId, holder: "stranger", quantity: 1 })).toBe(false);
+    expect(await stockOf(variantId)).toBe(1);
   });
 
   it("refuses a hold that has already lapsed", async () => {
-    // By now the item may belong to someone else. Honouring the stale hold is
-    // exactly how two people end up paying for one jacket.
-    const product = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "buyer",
-      reservedUntil: minutesFromNow(-1),
-    });
+    // Once lapsed, the unit may already be in another buyer's checkout.
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
+    await lapse(variantId, "buyer");
 
-    expect(await confirmSale(product.id, "buyer")).toBe(false);
-
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.status).toBe(ProductStatus.RESERVED);
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 1 })).toBe(false);
   });
 
   it("cannot be applied twice", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
+    const { variantId } = await makeProduct({}, { stock: 3 });
+    await reserveVariant(variantId, "buyer");
 
-    expect(await confirmSale(product.id, "buyer")).toBe(true);
-    expect(await confirmSale(product.id, "buyer")).toBe(false);
-
-    const history = await db.productStatusHistory.findMany({
-      where: { productId: product.id, toStatus: ProductStatus.SOLD },
-    });
-    expect(history).toHaveLength(1);
-  });
-});
-
-describe("releaseExpiredReservations", () => {
-  it("returns lapsed holds and leaves live ones alone", async () => {
-    const lapsed = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "buyer-a",
-      reservedUntil: minutesFromNow(-1),
-    });
-    const live = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "buyer-b",
-      reservedUntil: minutesFromNow(10),
-    });
-
-    expect(await releaseExpiredReservations()).toBe(1);
-
-    expect((await db.product.findUniqueOrThrow({ where: { id: lapsed.id } })).status).toBe(
-      ProductStatus.AVAILABLE,
-    );
-    expect((await db.product.findUniqueOrThrow({ where: { id: live.id } })).status).toBe(
-      ProductStatus.RESERVED,
-    );
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 1 })).toBe(true);
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 1 })).toBe(false);
+    expect(await stockOf(variantId)).toBe(2);
   });
 
-  it("never touches sold items", async () => {
-    // A sold item has no reservedUntil, but this is the sweep that runs forever
-    // against the whole catalogue — it is worth pinning that it cannot resurrect
-    // something already paid for.
-    const sold = await makeProduct({ status: ProductStatus.SOLD });
+  it("refuses to sell more than the hold covers", async () => {
+    const { variantId } = await makeProduct({}, { stock: 5 });
+    await reserveVariant(variantId, "buyer", 1);
 
-    await releaseExpiredReservations();
-
-    expect((await db.product.findUniqueOrThrow({ where: { id: sold.id } })).status).toBe(
-      ProductStatus.SOLD,
-    );
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 2 })).toBe(false);
   });
 
-  it("logs exactly the items it released", async () => {
-    await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "a",
-      reservedUntil: minutesFromNow(-1),
-    });
-    await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "b",
-      reservedUntil: minutesFromNow(10),
-    });
+  it("refuses when the owner has since lowered stock below what was held", async () => {
+    const { variantId } = await makeProduct({}, { stock: 2 });
+    await reserveVariant(variantId, "buyer", 2);
+    await db.productVariant.update({ where: { id: variantId }, data: { stock: 1 } });
 
-    await releaseExpiredReservations();
-
-    const history = await db.productStatusHistory.findMany({
-      where: { reason: "reservation expired" },
-    });
-    expect(history).toHaveLength(1);
-  });
-
-  it("does nothing, and reports nothing, when there is nothing to release", async () => {
-    await makeProduct();
-
-    expect(await releaseExpiredReservations()).toBe(0);
-    expect(await db.productStatusHistory.count()).toBe(0);
-  });
-
-  it("is safe to run repeatedly", async () => {
-    await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "a",
-      reservedUntil: minutesFromNow(-1),
-    });
-
-    expect(await releaseExpiredReservations()).toBe(1);
-    expect(await releaseExpiredReservations()).toBe(0);
-
-    const history = await db.productStatusHistory.findMany({
-      where: { reason: "reservation expired" },
-    });
-    expect(history).toHaveLength(1);
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 2 })).toBe(false);
+    expect(await stockOf(variantId)).toBe(1);
   });
 });
 
 describe("holdForPaymentReview", () => {
-  it("extends the hold well past the sweep, so a paid item is not resold", async () => {
-    // The failure this prevents: buyer pays at 14:09, hold lapses at 14:15, the
-    // sweep releases at 14:16, somebody else buys it, and the owner discovers at
-    // bedtime that two people paid for one jacket.
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
+  it("extends the hold to a day, so a paid unit is not resold overnight", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
 
-    expect(await holdForPaymentReview(product.id, "buyer")).toBe(true);
+    expect(await holdForPaymentReview(variantId, "buyer")).toBe(true);
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    const heldForHours = (stored.reservedUntil!.getTime() - Date.now()) / 3_600_000;
-    expect(heldForHours).toBeGreaterThan(PAYMENT_REVIEW_HOURS - 1);
-
-    expect(await releaseExpiredReservations()).toBe(0);
+    const hold = await holdOf(variantId, "buyer");
+    const hours = ((hold?.expiresAt.getTime() ?? 0) - Date.now()) / 3_600_000;
+    expect(hours).toBeGreaterThan(PAYMENT_REVIEW_HOURS - 0.1);
   });
 
   it("refuses to extend a hold belonging to someone else", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer-a");
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
 
-    expect(await holdForPaymentReview(product.id, "buyer-b")).toBe(false);
+    expect(await holdForPaymentReview(variantId, "stranger")).toBe(false);
   });
 
   it("refuses to extend a hold that has already lapsed", async () => {
-    const product = await makeProduct({
-      status: ProductStatus.RESERVED,
-      reservedBy: "buyer",
-      reservedUntil: minutesFromNow(-1),
-    });
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
+    await lapse(variantId, "buyer");
 
-    expect(await holdForPaymentReview(product.id, "buyer")).toBe(false);
-  });
-
-  it("does not record a status change, because there is not one", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
-    await holdForPaymentReview(product.id, "buyer");
-
-    const history = await db.productStatusHistory.findMany({ where: { productId: product.id } });
-    expect(history).toHaveLength(1);
+    expect(await holdForPaymentReview(variantId, "buyer")).toBe(false);
   });
 
   it("still allows the sale to be completed afterwards", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
-    await holdForPaymentReview(product.id, "buyer");
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
+    await holdForPaymentReview(variantId, "buyer");
 
-    expect(await confirmSale(product.id, "buyer")).toBe(true);
+    expect(await confirmSale({ variantId, holder: "buyer", quantity: 1 })).toBe(true);
   });
 });
 
 describe("releaseHoldIn", () => {
-  const release = (productId: string, holder: string, reason: string) =>
-    db.$transaction((tx) => releaseHoldIn(tx, productId, holder, reason));
+  const release = (variantId: string, holder: string) =>
+    db.$transaction((tx) => releaseHoldIn(tx, variantId, holder));
 
-  it("returns an item when its holder's payment is rejected, even after the hold lapsed", async () => {
-    // Lapsed but not yet swept is still this holder's, and still theirs to give back.
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
-    await db.product.update({
-      where: { id: product.id },
-      data: { reservedUntil: new Date(Date.now() - 1000) },
-    });
+  it("releases its holder's hold, even after it lapsed", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "buyer");
+    await lapse(variantId, "buyer");
 
-    expect(await release(product.id, "buyer", "payment rejected")).toBe(true);
-
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.status).toBe(ProductStatus.AVAILABLE);
-    expect(stored.reservedBy).toBeNull();
-  });
-
-  it("records the reason, since releasing a buyer's hold needs explaining", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "buyer");
-
-    await release(product.id, "buyer", "payment rejected: code already used");
-
-    const history = await db.productStatusHistory.findFirst({
-      where: { productId: product.id, toStatus: ProductStatus.AVAILABLE },
-    });
-    expect(history?.reason).toBe("payment rejected: code already used");
+    expect(await release(variantId, "buyer")).toBe(true);
+    expect(await holdOf(variantId, "buyer")).toBeNull();
   });
 
   it("will not release somebody else's hold", async () => {
-    const product = await makeProduct();
-    await reserveProduct(product.id, "second-buyer");
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "second-buyer");
 
-    expect(await release(product.id, "first-buyer", "payment rejected")).toBe(false);
+    expect(await release(variantId, "first-buyer")).toBe(false);
+    expect(await holdOf(variantId, "second-buyer")).not.toBeNull();
+  });
+});
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-    expect(stored.reservedBy).toBe("second-buyer");
+describe("releaseExpiredReservations", () => {
+  it("deletes lapsed holds and leaves live ones alone", async () => {
+    const lapsed = await makeProduct();
+    const live = await makeProduct();
+    await reserveVariant(lapsed.variantId, "a");
+    await reserveVariant(live.variantId, "b");
+    await lapse(lapsed.variantId, "a");
+
+    expect(await releaseExpiredReservations()).toBe(1);
+
+    expect(await holdOf(lapsed.variantId, "a")).toBeNull();
+    expect(await holdOf(live.variantId, "b")).not.toBeNull();
   });
 
-  it("will not resurrect a sold item", async () => {
-    const product = await makeProduct({ status: ProductStatus.SOLD });
+  it("is housekeeping only: a lapsed hold was already free before it ran", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "a");
+    await lapse(variantId, "a");
 
-    expect(await release(product.id, "buyer", "mistake")).toBe(false);
+    const before = await getAvailability([variantId]);
+    expect(before.get(variantId)).toEqual({ stock: 1, heldByOthers: 0 });
+  });
+
+  it("is safe to run repeatedly", async () => {
+    const { variantId } = await makeProduct();
+    await reserveVariant(variantId, "a");
+    await lapse(variantId, "a");
+
+    expect(await releaseExpiredReservations()).toBe(1);
+    expect(await releaseExpiredReservations()).toBe(0);
+  });
+});
+
+describe("getAvailability", () => {
+  it("counts other shoppers' holds, but not the viewer's own", async () => {
+    const { variantId } = await makeProduct({}, { stock: 3 });
+    await reserveVariant(variantId, "viewer", 1);
+    await reserveVariant(variantId, "someone-else", 1);
+
+    expect((await getAvailability([variantId], "viewer")).get(variantId)).toEqual({
+      stock: 3,
+      heldByOthers: 1,
+    });
+    expect((await getAvailability([variantId])).get(variantId)).toEqual({
+      stock: 3,
+      heldByOthers: 2,
+    });
+  });
+});
+
+describe("the database itself", () => {
+  it("refuses negative stock, whatever the code does", async () => {
+    const { variantId } = await makeProduct();
+
+    await expect(
+      db.productVariant.update({ where: { id: variantId }, data: { stock: -1 } }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a second variant for the same product and size", async () => {
+    const product = await makeProduct();
+
+    await expect(
+      db.productVariant.create({ data: { productId: product.id, option2: "M", stock: 1 } }),
+    ).rejects.toThrow();
   });
 });
 
 describe("why this is not a read-then-write", () => {
   /**
    * The lost update, written out so the difference is executable rather than
-   * asserted. Two statements: check, then write. Every concurrent caller reads
-   * before any of them writes, so every one of them believes it won.
+   * asserted. Two statements: count what is free, then hold. Every concurrent
+   * caller counts before any of them holds, so every one of them believes it won.
    */
-  async function naiveReserve(productId: string, holder: string): Promise<boolean> {
-    const product = await db.product.findUnique({ where: { id: productId } });
-    if (!product || product.status !== ProductStatus.AVAILABLE) return false;
+  async function naiveReserve(variantId: string, holder: string): Promise<boolean> {
+    const variant = await db.productVariant.findUniqueOrThrow({ where: { id: variantId } });
+    const { _sum } = await db.stockHold.aggregate({
+      where: { variantId, expiresAt: { gt: new Date() } },
+      _sum: { quantity: true },
+    });
+    if (variant.stock - (_sum.quantity ?? 0) < 1) return false;
 
-    await db.product.update({
-      where: { id: productId },
-      data: { status: ProductStatus.RESERVED, reservedBy: holder },
+    await db.stockHold.create({
+      data: { variantId, holder, quantity: 1, expiresAt: minutesFromNow(15) },
     });
 
     return true;
   }
 
-  it("the naive version sells one jacket to twenty buyers", async () => {
-    const product = await makeProduct();
+  it("the naive version holds one jacket for many buyers", async () => {
+    const { variantId } = await makeProduct();
 
     const results = await Promise.all(
-      Array.from({ length: 20 }, (_, index) => naiveReserve(product.id, `buyer-${index}`)),
+      Array.from({ length: 20 }, (_, index) => naiveReserve(variantId, `buyer-${index}`)),
     );
 
-    // Measured at 20 of 20, repeatably. This is not a rare race that needs
-    // hammering to reproduce — under any real concurrency it is the norm.
     expect(results.filter(Boolean).length).toBeGreaterThan(1);
   });
 
-  it("the conditional update sells it to one", async () => {
-    const product = await makeProduct();
+  it("locking the variant first holds it for one", async () => {
+    const { variantId } = await makeProduct();
 
     const results = await Promise.all(
-      Array.from({ length: 20 }, (_, index) => reserveProduct(product.id, `buyer-${index}`)),
+      Array.from({ length: 20 }, (_, index) => reserveVariant(variantId, `buyer-${index}`)),
     );
 
     expect(results.filter((result) => result.ok)).toHaveLength(1);
@@ -470,31 +402,26 @@ describe("why this is not a read-then-write", () => {
 });
 
 describe("the whole lifecycle", () => {
-  it("runs available, reserved, sold — and records each step", async () => {
-    const product = await makeProduct();
+  it("reserves, sells, and leaves a ledger of what happened", async () => {
+    const { variantId } = await makeProduct();
 
-    await reserveProduct(product.id, "buyer");
-    await confirmSale(product.id, "buyer");
+    await reserveVariant(variantId, "buyer");
+    await confirmSale({ variantId, holder: "buyer", quantity: 1 });
 
-    const history = await db.productStatusHistory.findMany({
-      where: { productId: product.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    expect(history.map((row) => [row.fromStatus, row.toStatus])).toEqual([
-      [ProductStatus.AVAILABLE, ProductStatus.RESERVED],
-      [ProductStatus.RESERVED, ProductStatus.SOLD],
-    ]);
+    expect(await stockOf(variantId)).toBe(0);
+    expect(await reserveVariant(variantId, "next")).toEqual({ ok: false, reason: "sold" });
+    const ledger = await db.stockMovement.findMany({ where: { variantId } });
+    expect(ledger.map((row) => [row.change, row.reason])).toEqual([[-1, "sale confirmed"]]);
   });
 
-  it("returns an abandoned item and lets the next buyer take it", async () => {
-    const product = await makeProduct();
+  it("frees an abandoned item and lets the next buyer take it", async () => {
+    const { variantId } = await makeProduct();
 
-    await reserveProduct(product.id, "buyer-a");
-    await releaseReservation(product.id, "buyer-a");
-    const second = await reserveProduct(product.id, "buyer-b");
+    await reserveVariant(variantId, "buyer-a");
+    await releaseReservation(variantId, "buyer-a");
+    const second = await reserveVariant(variantId, "buyer-b");
 
     expect(second.ok).toBe(true);
-    expect(await confirmSale(product.id, "buyer-b")).toBe(true);
+    expect(await confirmSale({ variantId, holder: "buyer-b", quantity: 1 })).toBe(true);
   });
 });

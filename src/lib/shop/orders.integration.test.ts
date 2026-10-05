@@ -1,38 +1,21 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { Category, Condition, Gender, OrderStatus, ProductStatus } from "@/generated/prisma/enums";
+import { OrderStatus } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
+import { makeProduct as makeTestProduct } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { addToCart, resolveCart } from "./cart";
 import { beginCheckout, claimPayment, getOrder, listOrdersBeingChecked } from "./orders";
-import { releaseExpiredReservations, reserveProduct } from "./reservations";
+import { releaseExpiredReservations, reserveVariant } from "./reservations";
 
 cleanDatabaseBetweenTests();
 
-let sequence = 0;
-
-beforeEach(() => {
-  sequence = 0;
-});
-
 const BUYER = { name: "Grace Wanjiku", phone: "254712345678" };
 
-async function makeProduct(overrides: Record<string, unknown> = {}) {
-  sequence += 1;
-
-  return db.product.create({
-    data: {
-      slug: `product-${sequence}`,
-      title: `Product ${sequence}`,
-      priceCents: 100_000,
-      size: "M",
-      category: Category.HOODIES,
-      condition: Condition.GOOD,
-      gender: Gender.UNISEX,
-      ...overrides,
-    },
-  });
-}
+const makeProduct = (
+  overrides: Record<string, unknown> = {},
+  variant: Parameters<typeof makeTestProduct>[1] = {},
+) => makeTestProduct({ priceCents: 100_000, ...overrides }, variant);
 
 async function makeUser(email = "grace@example.com") {
   return db.user.create({
@@ -41,10 +24,10 @@ async function makeUser(email = "grace@example.com") {
 }
 
 /** A buyer with a cart holding the given products. */
-async function shopperWith(products: { id: string }[], email = "grace@example.com") {
+async function shopperWith(products: { variantId: string }[], email = "grace@example.com") {
   const user = await makeUser(email);
   const cart = await resolveCart({ userId: user.id });
-  for (const product of products) await addToCart(cart.id, product.id);
+  for (const product of products) await addToCart(cart.id, product.variantId);
 
   return { user, cartId: cart.id };
 }
@@ -71,9 +54,10 @@ describe("beginCheckout", () => {
     expect(order.items).toHaveLength(2);
 
     for (const product of products) {
-      const stored = await db.product.findUniqueOrThrow({ where: { id: product.id } });
-      expect(stored.status).toBe(ProductStatus.RESERVED);
-      expect(stored.reservedBy).toBe(user.id);
+      const hold = await db.stockHold.findUnique({
+        where: { variantId_holder: { variantId: product.variantId, holder: user.id } },
+      });
+      expect(hold?.quantity).toBe(1);
     }
   });
 
@@ -90,7 +74,7 @@ describe("beginCheckout", () => {
 
   it("proceeds with what it can and names what dropped out", async () => {
     const available = await makeProduct({ title: "Grey hoodie" });
-    const gone = await makeProduct({ title: "Blue hoodie", status: ProductStatus.SOLD });
+    const gone = await makeProduct({ title: "Blue hoodie" }, { stock: 0 });
     const { user, cartId } = await shopperWith([available, gone]);
 
     const result = await beginCheckout(user.id, cartId, BUYER);
@@ -118,7 +102,7 @@ describe("beginCheckout", () => {
 
   it("refuses when nothing in the cart can be held", async () => {
     const taken = await makeProduct();
-    await reserveProduct(taken.id, "another-shopper");
+    await reserveVariant(taken.variantId, "another-shopper");
     const { user, cartId } = await shopperWith([taken]);
 
     expect(await beginCheckout(user.id, cartId, BUYER)).toEqual({
@@ -144,10 +128,8 @@ describe("beginCheckout", () => {
     await beginCheckout(user.id, cartId, BUYER);
 
     // Somebody else takes one, after the first visit to checkout.
-    await db.product.update({
-      where: { id: losing.id },
-      data: { status: ProductStatus.SOLD, reservedBy: null, reservedUntil: null },
-    });
+    await db.productVariant.update({ where: { id: losing.variantId }, data: { stock: 0 } });
+    await db.stockHold.deleteMany({ where: { variantId: losing.variantId } });
 
     const second = await beginCheckout(user.id, cartId, BUYER);
 
@@ -270,9 +252,9 @@ describe("claimPayment", () => {
       where: { id: orderId },
       include: { items: true },
     });
-    await db.product.update({
-      where: { id: order.items[0].productId },
-      data: { reservedUntil: new Date(Date.now() - 1000) },
+    await db.stockHold.updateMany({
+      where: { variantId: order.items[0].variantId ?? "" },
+      data: { expiresAt: new Date(Date.now() - 1000) },
     });
 
     expect(await claimPayment(orderId, user.id, "SGH7XKL2M9")).toEqual({
@@ -328,5 +310,59 @@ describe("listOrdersBeingChecked", () => {
     ]);
     // Not yet paid: nothing for the shop to check, so no reminder.
     expect(await listOrdersBeingChecked(unpaid.user.id)).toEqual([]);
+  });
+});
+
+describe("checkout with quantities", () => {
+  it("holds each line's quantity and charges for every unit", async () => {
+    const product = await makeProduct({ priceCents: 140_000 }, { stock: 5 });
+    const user = await makeUser();
+    const cart = await resolveCart({ userId: user.id });
+    await addToCart(cart.id, product.variantId, 2);
+
+    const result = await beginCheckout(user.id, cart.id, BUYER);
+
+    expect(result.ok && result.reduced).toEqual([]);
+    if (!result.ok) return;
+    const order = await db.order.findUniqueOrThrow({
+      where: { id: result.orderId },
+      include: { items: true },
+    });
+    expect(order.totalCents).toBe(280_000);
+    expect(order.items[0]).toMatchObject({ quantity: 2, priceCents: 140_000 });
+    const hold = await db.stockHold.findUnique({
+      where: { variantId_holder: { variantId: product.variantId, holder: user.id } },
+    });
+    expect(hold?.quantity).toBe(2);
+  });
+
+  it("holds what is free when fewer are left, and says so before payment", async () => {
+    const product = await makeProduct({ title: "Cargo Pants" }, { stock: 3 });
+    await reserveVariant(product.variantId, "someone-else", 2);
+    const user = await makeUser();
+    const cart = await resolveCart({ userId: user.id });
+    await addToCart(cart.id, product.variantId, 3);
+
+    const result = await beginCheckout(user.id, cart.id, BUYER);
+
+    expect(result.ok && result.reduced).toEqual([{ title: "Cargo Pants", requested: 3, held: 1 }]);
+  });
+
+  it("records the variant's own price and the colour on the order line", async () => {
+    const product = await makeProduct({ priceCents: 140_000 }, { stock: 2, priceCents: 160_000 });
+    const swatch = await db.productSwatch.create({
+      data: { productId: product.id, name: "Khaki" },
+    });
+    await db.productVariant.update({
+      where: { id: product.variantId },
+      data: { swatchId: swatch.id },
+    });
+    const { user, cartId } = await shopperWith([product]);
+
+    const result = await beginCheckout(user.id, cartId, BUYER);
+    if (!result.ok) throw new Error("setup");
+
+    const [item] = await db.orderItem.findMany({ where: { orderId: result.orderId } });
+    expect(item).toMatchObject({ swatch: "Khaki", size: "M", priceCents: 160_000 });
   });
 });

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { Category, Condition, Gender, OrderStatus, ProductStatus } from "@/generated/prisma/enums";
+import { OrderStatus } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { addToCart, resolveCart } from "@/lib/shop/cart";
 import { beginCheckout, claimPayment } from "@/lib/shop/orders";
-import { releaseExpiredReservations, reserveProduct } from "@/lib/shop/reservations";
+import { releaseExpiredReservations, reserveVariant } from "@/lib/shop/reservations";
+import { makeProduct as makeTestProduct } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import {
   confirmOrder,
@@ -18,22 +19,8 @@ cleanDatabaseBetweenTests();
 
 let sequence = 0;
 
-async function makeProduct(overrides: Record<string, unknown> = {}) {
-  sequence += 1;
-
-  return db.product.create({
-    data: {
-      slug: `product-${sequence}`,
-      title: `Product ${sequence}`,
-      priceCents: 100_000,
-      size: "M",
-      category: Category.HOODIES,
-      condition: Condition.GOOD,
-      gender: Gender.UNISEX,
-      ...overrides,
-    },
-  });
-}
+const makeProduct = (overrides: Record<string, unknown> = {}) =>
+  makeTestProduct({ priceCents: 100_000, ...overrides });
 
 async function makeUser(email: string, name: string | null = null) {
   return db.user.create({
@@ -45,12 +32,12 @@ let codes = 0;
 
 /** An order whose buyer has checked out and says they have paid. */
 async function claimedOrder(
-  products: { id: string }[],
+  products: { variantId: string }[],
   buyer = { email: "grace@example.com", name: "Grace Wanjiku", phone: "254712345678" },
 ) {
   const user = await makeUser(buyer.email);
   const cart = await resolveCart({ userId: user.id });
-  for (const product of products) await addToCart(cart.id, product.id);
+  for (const product of products) await addToCart(cart.id, product.variantId);
 
   const result = await beginCheckout(user.id, cart.id, { name: buyer.name, phone: buyer.phone });
   if (!result.ok) throw new Error("checkout failed to set up the test");
@@ -70,8 +57,14 @@ async function staff() {
   return makeUser(`staff-${sequence++}@example.com`, "Wanjiru");
 }
 
-const statusOf = async (productId: string) =>
-  (await db.product.findUniqueOrThrow({ where: { id: productId } })).status;
+/** Where a one-unit test product stands: sold, in somebody's hold, or free. */
+const stateOf = async ({ variantId }: { variantId: string }) => {
+  const variant = await db.productVariant.findUniqueOrThrow({ where: { id: variantId } });
+  if (variant.stock === 0) return "SOLD";
+  const live = await db.stockHold.count({ where: { variantId, expiresAt: { gt: new Date() } } });
+
+  return live > 0 ? "HELD" : "AVAILABLE";
+};
 
 describe("confirmOrder", () => {
   it("sells every item, records the note, and says who confirmed it", async () => {
@@ -85,7 +78,7 @@ describe("confirmOrder", () => {
     const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.CONFIRMED);
     expect(order.reviewNote).toBe("matched SMS");
-    for (const product of products) expect(await statusOf(product.id)).toBe(ProductStatus.SOLD);
+    for (const product of products) expect(await stateOf(product)).toBe("SOLD");
 
     const [entry] = await db.auditLog.findMany({ where: { entityId: orderId } });
     expect(entry).toMatchObject({
@@ -101,9 +94,9 @@ describe("confirmOrder", () => {
     // rest and stopping would leave an order half-confirmed.
     const [kept, lapsed] = [await makeProduct(), await makeProduct({ title: "Denim jacket" })];
     const { orderId } = await claimedOrder([kept, lapsed]);
-    await db.product.update({
-      where: { id: lapsed.id },
-      data: { reservedUntil: new Date(Date.now() - 1000) },
+    await db.stockHold.updateMany({
+      where: { variantId: lapsed.variantId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
     });
 
     const result = await confirmOrder({ orderId, actorId: (await staff()).id });
@@ -112,14 +105,14 @@ describe("confirmOrder", () => {
     expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe(
       OrderStatus.PENDING_CONFIRMATION,
     );
-    expect(await statusOf(kept.id)).toBe(ProductStatus.RESERVED);
+    expect(await stateOf(kept)).toBe("HELD");
     expect(await db.auditLog.count()).toBe(0);
   });
 
   it("will not confirm an order nobody has claimed payment for", async () => {
     const user = await makeUser("grace@example.com");
     const cart = await resolveCart({ userId: user.id });
-    await addToCart(cart.id, (await makeProduct()).id);
+    await addToCart(cart.id, (await makeProduct()).variantId);
     const checkout = await beginCheckout(user.id, cart.id, { name: "G", phone: "254712345678" });
     if (!checkout.ok) throw new Error("setup");
 
@@ -179,13 +172,10 @@ describe("rejectOrder", () => {
     const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.REJECTED);
     expect(order.reviewNote).toBe("code not found");
-    for (const product of products)
-      expect(await statusOf(product.id)).toBe(ProductStatus.AVAILABLE);
+    for (const product of products) expect(await stateOf(product)).toBe("AVAILABLE");
 
-    const history = await db.productStatusHistory.findFirst({
-      where: { productId: products[0].id, toStatus: ProductStatus.AVAILABLE },
-    });
-    expect(history?.reason).toBe("payment rejected: code not found");
+    // Stock never moved: a rejected payment only ends the holds.
+    expect(await db.stockMovement.count({ where: { reason: "sale confirmed" } })).toBe(0);
 
     const [entry] = await db.auditLog.findMany({ where: { entityId: orderId } });
     expect(entry).toMatchObject({
@@ -200,18 +190,17 @@ describe("rejectOrder", () => {
     // buyer reserves it. Rejecting the first order must leave theirs alone.
     const jacket = await makeProduct();
     const { orderId } = await claimedOrder([jacket]);
-    await db.product.update({
-      where: { id: jacket.id },
-      data: { reservedUntil: new Date(Date.now() - 1000) },
+    await db.stockHold.updateMany({
+      where: { variantId: jacket.variantId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
     });
     await releaseExpiredReservations();
-    expect((await reserveProduct(jacket.id, "second-buyer")).ok).toBe(true);
+    expect((await reserveVariant(jacket.variantId, "second-buyer")).ok).toBe(true);
 
     await rejectOrder({ orderId, actorId: (await staff()).id, reason: "code not found" });
 
-    const stored = await db.product.findUniqueOrThrow({ where: { id: jacket.id } });
-    expect(stored.status).toBe(ProductStatus.RESERVED);
-    expect(stored.reservedBy).toBe("second-buyer");
+    const holds = await db.stockHold.findMany({ where: { variantId: jacket.variantId } });
+    expect(holds.map((hold) => hold.holder)).toEqual(["second-buyer"]);
   });
 });
 
@@ -234,9 +223,8 @@ describe("two reviewers deciding at once", () => {
 
     // Whichever won, the items agree with it.
     const { status } = await db.order.findUniqueOrThrow({ where: { id: orderId } });
-    const expected =
-      status === OrderStatus.CONFIRMED ? ProductStatus.SOLD : ProductStatus.AVAILABLE;
-    for (const product of products) expect(await statusOf(product.id)).toBe(expected);
+    const expected = status === OrderStatus.CONFIRMED ? "SOLD" : "AVAILABLE";
+    for (const product of products) expect(await stateOf(product)).toBe(expected);
   });
 });
 

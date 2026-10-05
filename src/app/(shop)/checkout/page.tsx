@@ -80,6 +80,18 @@ export default async function CheckoutPage() {
         </p>
       )}
 
+      {result.reduced.length > 0 && (
+        <p className="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          {result.reduced
+            .map(
+              (line) =>
+                `Only ${line.held} of the ${line.requested} ${line.title} you wanted were free`,
+            )
+            .join(". ")}
+          . The order below is for what we could hold.
+        </p>
+      )}
+
       <OrderSummary orderId={result.orderId} />
 
       <section className="mt-10">
@@ -130,10 +142,11 @@ async function OrderSummary({ orderId }: { orderId: string }) {
             <span>
               {item.title}
               <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-400">
-                {item.size}
+                {[item.swatch, item.size].filter(Boolean).join(" · ")}
+                {item.quantity > 1 && ` · ×${item.quantity}`}
               </span>
             </span>
-            <span className="font-medium">{formatPrice(item.priceCents)}</span>
+            <span className="font-medium">{formatPrice(item.priceCents * item.quantity)}</span>
           </li>
         ))}
       </ul>

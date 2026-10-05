@@ -1,5 +1,6 @@
-import { ProductStatus } from "@/generated/prisma/enums";
 import { prisma } from "../prisma";
+import { MAX_PER_LINE, type VariantAvailability, freeUnits, maxQuantity } from "./availability";
+import { getAvailability } from "./reservations";
 
 /**
  * The cart.
@@ -22,13 +23,27 @@ export const ANONYMOUS_CART_DAYS = 30;
 export type CartLineUnavailable = "sold" | "held" | "withdrawn";
 
 export type CartLine = {
+  variantId: string;
   productId: string;
   slug: string;
   title: string;
-  priceCents: number;
+  /** Option-1 value, "Khaki" — null when the product has none. */
+  swatch: string | null;
+  /** Option-2 value, "32" — empty when the product has none. */
   size: string;
+  /** The price of one unit of this variant. */
+  priceCents: number;
+  /** What the shopper asked for. */
+  quantity: number;
+  /**
+   * What they can actually have right now: the quantity, lowered to what is
+   * free. Less than `quantity` means stock fell since it was added.
+   */
+  quantityAvailable: number;
+  /** The most the stepper may offer: what is free, capped per line. */
+  maxQuantity: number;
   image: { url: string; alt: string | null; width: number; height: number } | null;
-  /** False when this can no longer be bought. */
+  /** False when none of this can be bought. */
   available: boolean;
   reason?: CartLineUnavailable;
 };
@@ -96,7 +111,10 @@ export async function mergeAnonymousCart(
   await prisma.$transaction(async (tx) => {
     const anonymous = await tx.cart.findFirst({
       where: { id: anonymousCartId, userId: null },
-      select: { id: true, items: { select: { productId: true } } },
+      select: {
+        id: true,
+        items: { select: { productId: true, variantId: true, quantity: true } },
+      },
     });
 
     if (!anonymous) return;
@@ -115,9 +133,12 @@ export async function mergeAnonymousCart(
         data: anonymous.items.map((item) => ({
           cartId: existing.id,
           productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
         })),
-        // The unique constraint on (cartId, productId) decides duplicates, not a
-        // preceding lookup.
+        // The unique constraint on (cartId, variantId) decides duplicates, not a
+        // preceding lookup. Where both carts had the same variant, the signed-in
+        // cart's quantity stands.
         skipDuplicates: true,
       });
     }
@@ -127,33 +148,58 @@ export async function mergeAnonymousCart(
 }
 
 /**
- * Adds an item. Idempotent — adding twice leaves one row, not an error.
+ * Adds units of a variant. Adding a variant already in the cart raises its
+ * quantity, never past {@link MAX_PER_LINE}.
  *
- * Deliberately does not check whether the product is available. A cart may hold
- * something somebody else is currently checking out with, because that person
- * may not complete, and refusing here would make the cart quietly wrong the
- * moment a fifteen-minute hold began.
+ * Deliberately does not check stock. A cart may hold something somebody else is
+ * checking out with, because that person may not complete; the cart is checked
+ * against what is free every time it is shown, and checkout decides.
  */
-export async function addToCart(cartId: string, productId: string): Promise<void> {
-  const product = await prisma.product.findFirst({
-    where: { id: productId, deletedAt: null },
-    select: { id: true },
+export async function addToCart(cartId: string, variantId: string, quantity = 1): Promise<void> {
+  const variant = await prisma.productVariant.findFirst({
+    where: { id: variantId, product: { deletedAt: null } },
+    select: { id: true, productId: true },
   });
 
   // Withdrawn or nonexistent is different from unavailable: there is nothing to
   // put in a cart.
-  if (!product) return;
+  if (!variant) return;
 
-  await prisma.cartItem.createMany({
-    data: [{ cartId, productId }],
-    skipDuplicates: true,
+  const adding = clampQuantity(quantity);
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.cartItem.findUnique({
+      where: { cartId_variantId: { cartId, variantId } },
+      select: { quantity: true },
+    });
+
+    await tx.cartItem.upsert({
+      where: { cartId_variantId: { cartId, variantId } },
+      create: { cartId, productId: variant.productId, variantId, quantity: adding },
+      update: { quantity: clampQuantity((existing?.quantity ?? 0) + adding) },
+    });
   });
 
   await touch(cartId);
 }
 
-export async function removeFromCart(cartId: string, productId: string): Promise<void> {
-  await prisma.cartItem.deleteMany({ where: { cartId, productId } });
+/** Sets a line's quantity, for the steppers. Zero or less removes it. */
+export async function setCartQuantity(
+  cartId: string,
+  variantId: string,
+  quantity: number,
+): Promise<void> {
+  if (quantity <= 0) return removeFromCart(cartId, variantId);
+
+  await prisma.cartItem.updateMany({
+    where: { cartId, variantId },
+    data: { quantity: clampQuantity(quantity) },
+  });
+  await touch(cartId);
+}
+
+export async function removeFromCart(cartId: string, variantId: string): Promise<void> {
+  await prisma.cartItem.deleteMany({ where: { cartId, variantId } });
   await touch(cartId);
 }
 
@@ -165,57 +211,76 @@ export async function clearCart(cartId: string): Promise<void> {
 /**
  * The cart, with each line's current availability.
  *
- * `holderId` is the shopper: an item they are already holding a reservation on
- * counts as available to them, which is what makes returning to a cart
- * mid-checkout work rather than reporting their own hold as somebody else's.
+ * `holderId` is the shopper: units they already hold count as theirs, which is
+ * what makes returning to a cart mid-checkout work rather than reporting their
+ * own hold as somebody else's.
  */
 export async function getCartContents(cartId: string, holderId?: string): Promise<CartContents> {
   const items = await prisma.cartItem.findMany({
-    where: { cartId },
+    where: { cartId, variantId: { not: null } },
     orderBy: { createdAt: "asc" },
     select: {
-      product: {
+      quantity: true,
+      variant: {
         select: {
           id: true,
-          slug: true,
-          title: true,
+          option2: true,
           priceCents: true,
-          size: true,
-          status: true,
-          reservedBy: true,
-          reservedUntil: true,
-          deletedAt: true,
-          images: {
-            select: { url: true, alt: true, width: true, height: true },
-            orderBy: { position: "asc" },
-            take: 1,
+          swatch: { select: { name: true } },
+          product: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              priceCents: true,
+              deletedAt: true,
+              images: {
+                select: { url: true, alt: true, width: true, height: true },
+                orderBy: { position: "asc" },
+                take: 1,
+              },
+            },
           },
         },
       },
     },
   });
 
-  const now = Date.now();
+  const availability = await getAvailability(
+    items.flatMap((item) => (item.variant ? [item.variant.id] : [])),
+    holderId,
+  );
 
-  const lines: CartLine[] = items.map(({ product }) => {
-    const reason = unavailableReason(product, holderId, now);
+  const lines: CartLine[] = items.flatMap(({ quantity, variant }) => {
+    if (!variant) return [];
 
-    return {
-      productId: product.id,
-      slug: product.slug,
-      title: product.title,
-      priceCents: product.priceCents,
-      size: product.size,
-      image: product.images[0] ?? null,
-      available: reason === undefined,
-      ...(reason ? { reason } : {}),
-    };
+    const { product } = variant;
+    const counts = availability.get(variant.id) ?? { stock: 0, heldByOthers: 0 };
+    const reason = unavailableReason(product.deletedAt, counts);
+
+    return [
+      {
+        variantId: variant.id,
+        productId: product.id,
+        slug: product.slug,
+        title: product.title,
+        swatch: variant.swatch?.name ?? null,
+        size: variant.option2 ?? "",
+        priceCents: variant.priceCents ?? product.priceCents,
+        quantity,
+        quantityAvailable: reason ? 0 : Math.min(quantity, freeUnits(counts)),
+        maxQuantity: reason ? 0 : maxQuantity(counts),
+        image: product.images[0] ?? null,
+        available: reason === undefined,
+        ...(reason ? { reason } : {}),
+      },
+    ];
   });
 
   return {
     cartId,
     lines,
-    totalCents: lines.reduce((total, line) => total + (line.available ? line.priceCents : 0), 0),
+    totalCents: lines.reduce((total, line) => total + line.priceCents * line.quantityAvailable, 0),
     availableCount: lines.filter((line) => line.available).length,
   };
 }
@@ -231,30 +296,26 @@ export async function deleteAbandonedAnonymousCarts(now: Date = new Date()): Pro
   return count;
 }
 
+/**
+ * Why a line cannot be bought, or undefined when it can.
+ *
+ * Counts only unexpired holds, exactly as reserving does, so the cart never
+ * calls something taken that checkout would in fact grant.
+ */
 function unavailableReason(
-  product: {
-    status: ProductStatus;
-    reservedBy: string | null;
-    reservedUntil: Date | null;
-    deletedAt: Date | null;
-  },
-  holderId: string | undefined,
-  now: number,
+  deletedAt: Date | null,
+  counts: VariantAvailability,
 ): CartLineUnavailable | undefined {
-  if (product.deletedAt) return "withdrawn";
-  if (product.status === ProductStatus.SOLD) return "sold";
-
-  if (product.status === ProductStatus.RESERVED) {
-    // A lapsed hold belongs to nobody, exactly as the reservation query treats
-    // it — so a cart must not report an item as taken when checkout would in
-    // fact grant it.
-    const lapsed = !product.reservedUntil || product.reservedUntil.getTime() <= now;
-    if (lapsed) return undefined;
-
-    return product.reservedBy === holderId ? undefined : "held";
-  }
+  if (deletedAt) return "withdrawn";
+  if (counts.stock <= 0) return "sold";
+  if (freeUnits(counts) <= 0) return "held";
 
   return undefined;
+}
+
+/** A whole number from 1 to {@link MAX_PER_LINE}. */
+function clampQuantity(quantity: number): number {
+  return Math.min(MAX_PER_LINE, Math.max(1, Math.trunc(quantity) || 1));
 }
 
 function touch(cartId: string) {
@@ -289,7 +350,12 @@ export async function findCart(options: {
   return cart?.id ?? null;
 }
 
-/** How many items are in a cart, for the header. */
+/** How many units are in a cart, for the header: two of one shirt counts as two. */
 export async function countCartItems(cartId: string): Promise<number> {
-  return prisma.cartItem.count({ where: { cartId } });
+  const { _sum } = await prisma.cartItem.aggregate({
+    where: { cartId },
+    _sum: { quantity: true },
+  });
+
+  return _sum.quantity ?? 0;
 }

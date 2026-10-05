@@ -68,15 +68,12 @@ async function main() {
       description: item.description,
       brand: item.brand,
       priceCents: item.priceCents,
-      size: item.size,
       category: item.category,
       condition: item.condition,
       gender: item.gender,
-      status,
-      // A reservation without an expiry is an item lost from the catalogue, so
-      // the seeded one is given a live hold rather than an open-ended flag.
-      reservedUntil:
-        status === ProductStatus.RESERVED ? new Date(Date.now() + 15 * 60 * 1000) : null,
+      // Still required until the contract migration drops it; the variant below
+      // is what the shop reads.
+      size: item.size,
     };
 
     const product = await prisma.product.upsert({
@@ -84,6 +81,31 @@ async function main() {
       create: data,
       update: data,
     });
+
+    // One variant per thrift item: its size, one unit unless it has sold.
+    const stock = status === ProductStatus.SOLD ? 0 : 1;
+    const variant =
+      (await prisma.productVariant.findFirst({ where: { productId: product.id } })) ??
+      (await prisma.productVariant.create({
+        data: { productId: product.id, option2: item.size, stock },
+      }));
+    await prisma.productVariant.update({
+      where: { id: variant.id },
+      data: { option2: item.size, stock },
+    });
+    await prisma.stockHold.deleteMany({ where: { variantId: variant.id } });
+    if (status === ProductStatus.RESERVED) {
+      // A short, real hold, so the RESERVED badge shows for a while after
+      // seeding and then lapses exactly as a buyer's would.
+      await prisma.stockHold.create({
+        data: {
+          variantId: variant.id,
+          holder: "seed",
+          quantity: 1,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+    }
 
     // Images are replaced wholesale rather than reconciled. The manifest is the
     // source of truth, this runs only against seed data, and a diff would be
@@ -105,9 +127,11 @@ async function main() {
     // Only on first creation: re-seeding should not fabricate a second arrival
     // for an item that has been in the catalogue all along.
     if (!existing) {
-      await prisma.productStatusHistory.create({
-        data: { productId: product.id, toStatus: status, reason: "seeded" },
-      });
+      if (stock > 0) {
+        await prisma.stockMovement.create({
+          data: { variantId: variant.id, change: stock, reason: "opening stock" },
+        });
+      }
       created += 1;
     } else {
       updated += 1;

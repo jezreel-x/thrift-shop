@@ -139,5 +139,8 @@ function ResultsSkeleton() {
 }
 
 function vocabularyOf(categories: { slug: string; option2Values: string[] }[]) {
-  return { categories: categories.map((category) => category.slug), sizes: sizesAcross(categories) };
+  return {
+    categories: categories.map((category) => category.slug),
+    sizes: sizesAcross(categories),
+  };
 }

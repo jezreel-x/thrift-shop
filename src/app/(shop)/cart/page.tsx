@@ -5,7 +5,10 @@ import Link from "next/link";
 import type { CartLine } from "@/lib/shop/cart";
 import { removeFromCartAction } from "@/lib/shop/cart-actions";
 import { readCart } from "@/lib/shop/cart-session";
+import { ProductCard } from "@/components/product-card";
 import { QuantityStepper } from "@/components/quantity-stepper";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import { listSuggestions } from "@/lib/shop/suggestions";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {
@@ -28,6 +31,12 @@ export default async function CartPage() {
   if (lines.length === 0) return <EmptyCart />;
 
   const unavailable = lines.filter((line) => !line.available);
+  const user = await getCurrentUser();
+  const suggestions = await listSuggestions({
+    productIds: [...new Set(lines.map((line) => line.productId))],
+    sizes: lines.flatMap((line) => (line.size ? [line.size] : [])),
+    viewer: user?.id,
+  });
   // Units that can be paid for: two of one shirt count as two pieces.
   const units = lines.reduce((sum, line) => sum + line.quantityAvailable, 0);
 
@@ -78,6 +87,21 @@ export default async function CartPage() {
       >
         Keep looking
       </Link>
+
+      {suggestions.length > 0 && (
+        <section aria-labelledby="also-like" className="mt-16">
+          <h2 id="also-like" className="text-lg font-semibold tracking-tight">
+            You may also like
+          </h2>
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-4">
+            {suggestions.map((product) => (
+              // None of these are in the cart, so no stepper yet: Add to cart
+              // brings the shopper back here with it added.
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

@@ -156,37 +156,7 @@ export async function listProducts({
   const pageIds = ranked
     .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
     .map((product) => product.id);
-  const rankedById = new Map(ranked.map((product) => [product.id, product]));
-
-  const cards = await prisma.product.findMany({
-    where: { id: { in: pageIds } },
-    select: cardSelect,
-  });
-  const byId = new Map(cards.map((card) => [card.id, card]));
-
-  const items = pageIds.flatMap((id) => {
-    const card = byId.get(id);
-    const summary = rankedById.get(id);
-    if (!card || !summary) return [];
-
-    const only = summary.variants.length === 1 ? summary.variants[0] : null;
-
-    return [
-      {
-        ...card,
-        availability: summary.state,
-        // Once each: a size made in three colours is still one size.
-        sizes: [
-          ...new Set(
-            card.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : [])),
-          ),
-        ],
-        fromPriceCents: summary.priceCents,
-        priceVaries: summary.priceVaries,
-        quickAdd: only ? { variantId: only.id, maxQuantity: maxQuantity(only) } : null,
-      },
-    ];
-  });
+  const items = await getProductCards(pageIds);
 
   return {
     items,
@@ -194,6 +164,58 @@ export async function listProducts({
     page: currentPage,
     pageCount: Math.max(1, Math.ceil(ranked.length / PAGE_SIZE)),
   };
+}
+
+/**
+ * Catalogue cards for these products, in the order given.
+ *
+ * Shared by the listing and by "You may also like", so a card means the same
+ * everywhere: its availability, its "From" price, and whether it can be added
+ * from the grid or needs a colour or size chosen first.
+ */
+export async function getProductCards(ids: string[]): Promise<ProductCard[]> {
+  if (ids.length === 0) return [];
+
+  const cards = await prisma.product.findMany({
+    where: { id: { in: ids } },
+    select: {
+      ...cardSelect,
+      variants: {
+        select: { id: true, option2: true, priceCents: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  const availability = await getAvailability(
+    cards.flatMap((card) => card.variants.map((variant) => variant.id)),
+  );
+  const byId = new Map(cards.map((card) => [card.id, card]));
+
+  return ids.flatMap((id) => {
+    const card = byId.get(id);
+    if (!card) return [];
+
+    const variants = card.variants.map((variant) => ({
+      ...variant,
+      ...(availability.get(variant.id) ?? NO_STOCK),
+    }));
+    const summary = priceSummary(variants, card.priceCents);
+    const only = variants.length === 1 ? variants[0] : null;
+
+    return [
+      {
+        ...card,
+        availability: productAvailability(variants),
+        // Once each: a size made in three colours is still one size.
+        sizes: [
+          ...new Set(variants.flatMap((variant) => (variant.option2 ? [variant.option2] : []))),
+        ],
+        fromPriceCents: summary.priceCents,
+        priceVaries: summary.varies,
+        quickAdd: only ? { variantId: only.id, maxQuantity: maxQuantity(only) } : null,
+      },
+    ];
+  });
 }
 
 /**

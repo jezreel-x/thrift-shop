@@ -5,6 +5,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { getPaymentDetails } from "@/lib/shop/settings";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import {
+  clearPaymentSettings,
   getPaymentSettingsFormValues,
   listPaymentSettingsHistory,
   savePaymentSettings,
@@ -108,5 +109,46 @@ describe("getPaymentDetails", () => {
       name: "",
       note: "",
     });
+  });
+});
+
+describe("clearPaymentSettings", () => {
+  it("takes payment offline and records what was removed", async () => {
+    const owner = await staff();
+    await savePaymentSettings({ value: TILL, actorId: owner.id });
+
+    expect(await clearPaymentSettings({ actorId: owner.id })).toEqual({ changed: true });
+
+    expect(await getPaymentDetails()).toBeNull();
+    expect((await getPaymentSettingsFormValues()).number).toBe("");
+    const removal = await db.auditLog.findFirstOrThrow({
+      where: { action: "settings.clear-payment" },
+    });
+    expect(removal).toMatchObject({
+      actorId: owner.id,
+      before: { method: "TILL", number: "123456", name: "THE THRIFT PLUG" },
+    });
+
+    const [latest] = await listPaymentSettingsHistory();
+    expect(latest.changes).toEqual([
+      "Payment details removed: checkout shows payment as not set up",
+    ]);
+  });
+
+  it("does nothing, and records nothing, when there is nothing to remove", async () => {
+    const owner = await staff();
+
+    expect(await clearPaymentSettings({ actorId: owner.id })).toEqual({ changed: false });
+    expect(await db.auditLog.count()).toBe(0);
+  });
+
+  it("lets new details be saved afterwards, described as set for the first time again", async () => {
+    const owner = await staff();
+    await savePaymentSettings({ value: TILL, actorId: owner.id });
+    await clearPaymentSettings({ actorId: owner.id });
+
+    await savePaymentSettings({ value: { ...TILL, number: "654321" }, actorId: owner.id });
+
+    expect((await getPaymentDetails())?.number).toBe("654321");
   });
 });

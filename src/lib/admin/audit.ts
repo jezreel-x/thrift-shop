@@ -16,7 +16,11 @@ import type { Prisma } from "@/generated/prisma/client";
  * a category nobody ever filters for. Grows as each admin feature lands.
  */
 export type AuditAction =
-  "staff.grant-role" | "order.confirm-payment" | "order.reject-payment" | "settings.update-payment";
+  | "staff.grant-role"
+  | "order.confirm-payment"
+  | "order.reject-payment"
+  | "settings.update-payment"
+  | "settings.clear-payment";
 
 export type AuditEntityType = "User" | "StaffRole" | "Order" | "Product" | "ShopSettings";
 

@@ -1,4 +1,5 @@
 import { PaymentSettingsForm } from "@/components/admin/payment-settings-form";
+import { RemovePaymentDetails } from "@/components/admin/remove-payment-details";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
@@ -18,6 +19,7 @@ export default async function AdminSettingsPage() {
     getPaymentSettingsFormValues(),
     listPaymentSettingsHistory(),
   ]);
+  const hasDetails = Boolean(initial.method || initial.number || initial.name);
 
   return (
     <main className="mx-auto w-full max-w-5xl">
@@ -35,12 +37,17 @@ export default async function AdminSettingsPage() {
         <div className="mt-6">
           {/* Labels are passed in so the client form never imports server code. */}
           <PaymentSettingsForm
+            // Remount when the details are removed or first set, so the form
+            // shows what is saved rather than what was last typed.
+            key={hasDetails ? "set" : "empty"}
             initial={initial}
             instructions={PAYMENT_INSTRUCTIONS}
             numberLabels={PAYMENT_NUMBER_LABELS}
           />
         </div>
       </section>
+
+      {hasDetails && <RemovePaymentDetails />}
 
       <section aria-labelledby="changes" className="mt-12">
         <h2 id="changes" className="text-[11px] font-medium tracking-wider text-muted uppercase">

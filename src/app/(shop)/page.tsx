@@ -11,6 +11,7 @@ import {
   parseProductQuery,
 } from "@/lib/shop/product-search-params";
 import type { ProductQuery } from "@/lib/shop/product-search-params";
+import { listCategories, sizesAcross } from "@/lib/shop/categories";
 import { listProducts } from "@/lib/shop/products";
 
 /**
@@ -24,7 +25,7 @@ import { listProducts } from "@/lib/shop/products";
  * between a dozen spellings of itself.
  */
 export async function generateMetadata({ searchParams }: PageProps<"/">): Promise<Metadata> {
-  const query = parseProductQuery(await searchParams);
+  const query = parseProductQuery(await searchParams, vocabularyOf(await listCategories()));
 
   return {
     title: "Secondhand fashion in Nairobi",
@@ -39,7 +40,8 @@ export async function generateMetadata({ searchParams }: PageProps<"/">): Promis
 }
 
 export default async function CataloguePage({ searchParams }: PageProps<"/">) {
-  const query = parseProductQuery(await searchParams);
+  const categories = await listCategories();
+  const query = parseProductQuery(await searchParams, vocabularyOf(categories));
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -53,7 +55,11 @@ export default async function CataloguePage({ searchParams }: PageProps<"/">) {
 
       <div className="lg:grid lg:grid-cols-[16rem_1fr] lg:gap-10">
         <aside className="mb-6 lg:mb-0">
-          <ProductFilters query={query} />
+          <ProductFilters
+            query={query}
+            categories={categories.map(({ slug, name }) => ({ slug, name }))}
+            sizes={sizesAcross(categories)}
+          />
         </aside>
 
         {/*
@@ -130,4 +136,8 @@ function ResultsSkeleton() {
       ))}
     </section>
   );
+}
+
+function vocabularyOf(categories: { slug: string; option2Values: string[] }[]) {
+  return { categories: categories.map((category) => category.slug), sizes: sizesAcross(categories) };
 }

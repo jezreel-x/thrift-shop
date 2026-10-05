@@ -1,4 +1,4 @@
-import type { Category, Condition, Gender } from "@/generated/prisma/enums";
+import type { Condition, Gender } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "../prisma";
 import {
@@ -24,7 +24,8 @@ export type ProductSort = "newest" | "price-asc" | "price-desc";
 
 export type ProductFilters = {
   sizes?: string[];
-  categories?: Category[];
+  /** Category slugs. */
+  categories?: string[];
   conditions?: Condition[];
   genders?: Gender[];
   minPriceCents?: number;
@@ -47,10 +48,10 @@ const cardSelect = {
   title: true,
   brand: true,
   priceCents: true,
-  category: true,
   condition: true,
   gender: true,
   createdAt: true,
+  categoryRef: { select: { slug: true, name: true, showCondition: true } },
   variants: { select: { id: true, option2: true }, orderBy: { createdAt: "asc" } },
   images: {
     select: { url: true, alt: true, width: true, height: true },
@@ -158,6 +159,7 @@ export async function getProductBySlug(slug: string) {
     where: { slug, deletedAt: null },
     include: {
       images: { orderBy: { position: "asc" } },
+      categoryRef: true,
       variants: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -204,7 +206,7 @@ function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
   // Any variant in one of the sizes, sold out or not: the catalogue shows sold
   // pieces, so a size filter must find them too.
   if (sizes?.length) where.variants = { some: { option2: { in: sizes } } };
-  if (categories?.length) where.category = { in: categories };
+  if (categories?.length) where.categoryRef = { slug: { in: categories } };
   if (conditions?.length) where.condition = { in: conditions };
   if (genders?.length) where.gender = { in: genders };
 

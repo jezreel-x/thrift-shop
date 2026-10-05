@@ -1,5 +1,5 @@
-import { Category, Condition, Gender } from "@/generated/prisma/enums";
-import { allSizes } from "./catalogue";
+import { Condition, Gender } from "@/generated/prisma/enums";
+import { normaliseCategorySlug } from "./categories";
 import type { ProductFilters, ProductSort } from "./products";
 
 /**
@@ -54,9 +54,22 @@ export type ProductQuery = {
  */
 const CENTS_PER_SHILLING = 100;
 
-export function parseProductQuery(raw: RawSearchParams): ProductQuery {
-  const sizes = validValues(raw[PARAM.size], new Set(allSizes()));
-  const categories = validValues(raw[PARAM.category], new Set<string>(Object.values(Category)));
+/**
+ * The values a query may use, which since categories became data come from the
+ * database rather than the schema: the category slugs, and every size they
+ * offer.
+ */
+export type CatalogueVocabulary = {
+  categories: readonly string[];
+  sizes: readonly string[];
+};
+
+export function parseProductQuery(
+  raw: RawSearchParams,
+  vocabulary: CatalogueVocabulary,
+): ProductQuery {
+  const sizes = validValues(raw[PARAM.size], new Set(vocabulary.sizes));
+  const categories = validValues(normaliseAll(raw[PARAM.category]), new Set(vocabulary.categories));
   const conditions = validValues(raw[PARAM.condition], new Set<string>(Object.values(Condition)));
   const genders = validValues(raw[PARAM.gender], new Set<string>(Object.values(Gender)));
 
@@ -66,7 +79,7 @@ export function parseProductQuery(raw: RawSearchParams): ProductQuery {
 
   const filters: ProductFilters = {};
   if (sizes.length) filters.sizes = sizes;
-  if (categories.length) filters.categories = categories as Category[];
+  if (categories.length) filters.categories = categories;
   if (conditions.length) filters.conditions = conditions as Condition[];
   if (genders.length) filters.genders = genders as Gender[];
   if (search) filters.search = search;
@@ -138,6 +151,13 @@ function validValues(raw: string | string[] | undefined, allowed: Set<string>): 
   const values = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
 
   return [...new Set(values.filter((value) => allowed.has(value)))];
+}
+
+/** Category values in slug form, so old links (?category=HOODIES) still work. */
+function normaliseAll(raw: string | string[] | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+
+  return (Array.isArray(raw) ? raw : [raw]).map(normaliseCategorySlug);
 }
 
 /** A repeated key arrives as an array; for single-valued params, take the first. */

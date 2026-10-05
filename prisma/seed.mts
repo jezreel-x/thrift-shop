@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Category, Condition, Gender, ProductStatus } from "../src/generated/prisma/enums";
-import { isValidSize } from "../src/lib/shop/catalogue";
+import { normaliseCategorySlug, offersOption2 } from "../src/lib/shop/categories";
 import { prisma } from "../src/lib/prisma";
 
 /**
@@ -52,7 +52,14 @@ type ManifestItem = {
 async function main() {
   const items = await readManifest();
 
-  validate(items);
+  // Categories are data, created by the migration; the manifest still names
+  // them the old way (HOODIES), which reads as the slug "hoodies".
+  const categories = new Map(
+    (await prisma.productCategory.findMany()).map((category) => [category.slug, category]),
+  );
+  const categoryOf = (item: ManifestItem) => categories.get(normaliseCategorySlug(item.category));
+
+  validate(items, categoryOf);
 
   let created = 0;
   let updated = 0;
@@ -69,6 +76,7 @@ async function main() {
       brand: item.brand,
       priceCents: item.priceCents,
       category: item.category,
+      categoryId: categoryOf(item)?.id,
       condition: item.condition,
       gender: item.gender,
       // Still required until the contract migration drops it; the variant below
@@ -162,7 +170,10 @@ async function readManifest(): Promise<ManifestItem[]> {
  * them is silent if it reaches the database: a size the filter cannot match, a
  * duplicate slug overwriting a different garment, an item priced at nothing.
  */
-function validate(items: ManifestItem[]): void {
+function validate(
+  items: ManifestItem[],
+  categoryOf: (item: ManifestItem) => { option2Values: string[] } | undefined,
+): void {
   const problems: string[] = [];
   const seen = new Set<string>();
 
@@ -174,7 +185,10 @@ function validate(items: ManifestItem[]): void {
     if (!Number.isInteger(item.priceCents)) {
       problems.push(`${item.slug}: priceCents must be whole cents, got ${item.priceCents}`);
     }
-    if (!isValidSize(item.category, item.size)) {
+    const category = categoryOf(item);
+    if (!category) {
+      problems.push(`${item.slug}: no category "${item.category}" in the database`);
+    } else if (!offersOption2(category, item.size)) {
       problems.push(`${item.slug}: "${item.size}" is not a size offered for ${item.category}`);
     }
     if (item.images.length === 0) problems.push(`${item.slug}: no images`);

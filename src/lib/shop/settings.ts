@@ -65,3 +65,16 @@ export const PAYMENT_NUMBER_LABELS: Record<PaymentMethod, string> = {
   [PaymentMethod.PAYBILL]: "Business number",
   [PaymentMethod.POCHI]: "Send to number",
 };
+
+/**
+ * The shop's WhatsApp number, canonical 2547XXXXXXXX, or null when not set —
+ * in which case "Order on WhatsApp" is not offered at all.
+ */
+export async function getShopWhatsApp(): Promise<string | null> {
+  const settings = await prisma.shopSettings.findUnique({
+    where: { id: SINGLETON },
+    select: { whatsappNumber: true },
+  });
+
+  return settings?.whatsappNumber ?? null;
+}

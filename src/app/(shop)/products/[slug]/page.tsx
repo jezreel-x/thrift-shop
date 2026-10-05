@@ -11,6 +11,10 @@ import { buildProductQuery } from "@/lib/shop/product-search-params";
 import { getProductBySlug } from "@/lib/shop/products";
 import { type Selection, resolveChoice } from "@/lib/shop/variant-choice";
 import { VariantPicker } from "@/components/variant-picker";
+import { OrderOnWhatsApp } from "@/components/order-on-whatsapp";
+import { getShopWhatsApp } from "@/lib/shop/settings";
+import { siteUrl } from "@/lib/site";
+import { orderMessage } from "@/lib/shop/whatsapp-order";
 
 export async function generateMetadata({
   params,
@@ -90,7 +94,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
   );
   const images = ofSwatch.length > 0 ? ofSwatch : product.images;
 
-  const cart = await readCart();
+  const [cart, whatsapp] = await Promise.all([readCart(), getShopWhatsApp()]);
   const inCartQuantity = cart?.lines.find((line) => line.variantId === variant?.id)?.quantity ?? 0;
   const option2Name = product.categoryRef?.option2Name ?? "Size";
   const needs =
@@ -204,6 +208,32 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
               inCartQuantity={inCartQuantity}
               needs={needs}
             />
+            {/* Once there is something specific to ask for, and something to be had. */}
+            {whatsapp && variant && choice.free > 0 && (
+              <div className="mt-3">
+                <OrderOnWhatsApp
+                  number={whatsapp}
+                  message={orderMessage(
+                    [
+                      {
+                        title: product.title,
+                        swatch: selectedSwatch?.name ?? null,
+                        size: variant.option2,
+                        quantity: 1,
+                        priceCents: choice.priceCents,
+                      },
+                    ],
+                    new URL(
+                      `/products/${product.slug}?${new URLSearchParams({
+                        ...(selectedSwatch ? { option1: selectedSwatch.slug } : {}),
+                        ...(variant.option2 ? { option2: variant.option2 } : {}),
+                      })}`,
+                      siteUrl,
+                    ).toString(),
+                  )}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

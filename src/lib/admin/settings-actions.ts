@@ -9,6 +9,7 @@ import {
   clearPaymentSettings,
   parsePaymentSettings,
   savePaymentSettings,
+  saveWhatsAppNumber,
 } from "./payment-settings";
 
 export type PaymentSettingsFormState = {
@@ -47,4 +48,24 @@ export async function clearPaymentSettingsAction(): Promise<void> {
   await clearPaymentSettings({ actorId: user.id });
 
   revalidatePath("/admin/settings");
+}
+
+export type WhatsAppFormState = { error?: string; saved?: "changed" | "unchanged" };
+
+/** Sets the number "Order on WhatsApp" opens. Same permission as payment details. */
+export async function saveWhatsAppAction(
+  _previous: WhatsAppFormState,
+  formData: FormData,
+): Promise<WhatsAppFormState> {
+  const { user } = await requirePermission(Permission.SETTINGS_EDIT);
+
+  const result = await saveWhatsAppNumber({
+    raw: String(formData.get("whatsappNumber") ?? ""),
+    actorId: user.id,
+  });
+  if (!result.ok) return { error: result.error };
+
+  revalidatePath("/admin/settings");
+
+  return { saved: result.changed ? "changed" : "unchanged" };
 }

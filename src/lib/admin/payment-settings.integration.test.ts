@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
-import { getPaymentDetails } from "@/lib/shop/settings";
+import { getPaymentDetails, getShopWhatsApp } from "@/lib/shop/settings";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import {
   clearPaymentSettings,
   getPaymentSettingsFormValues,
+  getWhatsAppFormValue,
   listPaymentSettingsHistory,
   savePaymentSettings,
+  saveWhatsAppNumber,
 } from "./payment-settings";
 
 cleanDatabaseBetweenTests();
@@ -150,5 +152,49 @@ describe("clearPaymentSettings", () => {
     await savePaymentSettings({ value: { ...TILL, number: "654321" }, actorId: owner.id });
 
     expect((await getPaymentDetails())?.number).toBe("654321");
+  });
+});
+
+describe("saveWhatsAppNumber", () => {
+  it("stores the number however it is typed, and records the change", async () => {
+    const owner = await staff();
+
+    expect(await saveWhatsAppNumber({ raw: "0712 345 678", actorId: owner.id })).toEqual({
+      ok: true,
+      changed: true,
+    });
+
+    expect(await getShopWhatsApp()).toBe("254712345678");
+    expect(await getWhatsAppFormValue()).toBe("0712 345 678");
+    const [latest] = await listPaymentSettingsHistory();
+    expect(latest.changes).toEqual(["WhatsApp number: (none) → 0712 345 678"]);
+  });
+
+  it("clears it when left empty, which hides the button", async () => {
+    const owner = await staff();
+    await saveWhatsAppNumber({ raw: "0712345678", actorId: owner.id });
+
+    await saveWhatsAppNumber({ raw: "  ", actorId: owner.id });
+
+    expect(await getShopWhatsApp()).toBeNull();
+  });
+
+  it("refuses something that is not a mobile number, and changes nothing", async () => {
+    const owner = await staff();
+
+    const result = await saveWhatsAppNumber({ raw: "020 123 4567", actorId: owner.id });
+
+    expect(result.ok).toBe(false);
+    expect(await getShopWhatsApp()).toBeNull();
+    expect(await db.auditLog.count()).toBe(0);
+  });
+
+  it("leaves the payment details alone", async () => {
+    const owner = await staff();
+    await savePaymentSettings({ value: TILL, actorId: owner.id });
+
+    await saveWhatsAppNumber({ raw: "0712345678", actorId: owner.id });
+
+    expect((await getPaymentDetails())?.number).toBe("123456");
   });
 });

@@ -20,7 +20,8 @@ export type AuditAction =
   | "order.confirm-payment"
   | "order.reject-payment"
   | "settings.update-payment"
-  | "settings.clear-payment";
+  | "settings.clear-payment"
+  | "settings.update-whatsapp";
 
 export type AuditEntityType = "User" | "StaffRole" | "Order" | "Product" | "ShopSettings";
 

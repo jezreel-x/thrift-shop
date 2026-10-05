@@ -218,6 +218,51 @@ export async function clearPaymentSettings(input: {
   });
 }
 
+/**
+ * Sets or clears the shop's WhatsApp number. Accepts it however it is typed;
+ * an empty value clears it and hides "Order on WhatsApp".
+ */
+export async function saveWhatsAppNumber(input: {
+  raw: string;
+  actorId: string;
+}): Promise<{ ok: true; changed: boolean } | { ok: false; error: string }> {
+  const raw = input.raw.trim();
+  const number = raw === "" ? null : normalisePhone(raw);
+  if (raw !== "" && !number) {
+    return {
+      ok: false,
+      error: "Enter the Safaricom or Airtel number buyers message, like 0712 345 678.",
+    };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.shopSettings.findUnique({ where: { id: SINGLETON } });
+    if ((before?.whatsappNumber ?? null) === number) return { ok: true as const, changed: false };
+
+    await tx.shopSettings.upsert({
+      where: { id: SINGLETON },
+      create: { id: SINGLETON, whatsappNumber: number },
+      update: { whatsappNumber: number },
+    });
+    await recordAudit(tx, {
+      actorId: input.actorId,
+      action: "settings.update-whatsapp",
+      entityType: "ShopSettings",
+      entityId: SINGLETON,
+      before: { whatsappNumber: before?.whatsappNumber ?? null },
+      after: { whatsappNumber: number },
+    });
+
+    return { ok: true as const, changed: true };
+  });
+}
+
+/** The saved WhatsApp number, as the owner would type it. */
+export async function getWhatsAppFormValue(): Promise<string> {
+  const row = await prisma.shopSettings.findUnique({ where: { id: SINGLETON } });
+  return row?.whatsappNumber ? formatPhone(row.whatsappNumber) : "";
+}
+
 export type PaymentSettingsChange = {
   id: string;
   createdAt: Date;
@@ -231,7 +276,9 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
   const entries = await prisma.auditLog.findMany({
     where: {
       entityType: "ShopSettings",
-      action: { in: ["settings.update-payment", "settings.clear-payment"] },
+      action: {
+        in: ["settings.update-payment", "settings.clear-payment", "settings.update-whatsapp"],
+      },
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -252,7 +299,14 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
     changes:
       entry.action === "settings.clear-payment"
         ? ["Payment details removed: checkout shows payment as not set up"]
-        : describeChanges(asRecord(entry.before), asRecord(entry.after)),
+        : entry.action === "settings.update-whatsapp"
+          ? [
+              `WhatsApp number: ${show("number", asRecord(entry.before)?.whatsappNumber)} → ${show(
+                "number",
+                asRecord(entry.after)?.whatsappNumber,
+              )}`,
+            ]
+          : describeChanges(asRecord(entry.before), asRecord(entry.after)),
   }));
 }
 

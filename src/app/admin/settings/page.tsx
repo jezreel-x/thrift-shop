@@ -1,10 +1,12 @@
 import { PaymentSettingsForm } from "@/components/admin/payment-settings-form";
 import { RemovePaymentDetails } from "@/components/admin/remove-payment-details";
+import { WhatsAppSettingsForm } from "@/components/admin/whatsapp-settings-form";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
 import {
   getPaymentSettingsFormValues,
+  getWhatsAppFormValue,
   listPaymentSettingsHistory,
 } from "@/lib/admin/payment-settings";
 import { formatDateTime } from "@/lib/dates";
@@ -15,9 +17,10 @@ export const generateMetadata = staffTitle("Settings", Permission.SETTINGS_EDIT)
 export default async function AdminSettingsPage() {
   await requirePermission(Permission.SETTINGS_EDIT, "/admin/settings");
 
-  const [initial, history] = await Promise.all([
+  const [initial, history, whatsapp] = await Promise.all([
     getPaymentSettingsFormValues(),
     listPaymentSettingsHistory(),
+    getWhatsAppFormValue(),
   ]);
   const hasDetails = Boolean(initial.method || initial.number || initial.name);
 
@@ -48,6 +51,17 @@ export default async function AdminSettingsPage() {
       </section>
 
       {hasDetails && <RemovePaymentDetails />}
+
+      <section aria-labelledby="whatsapp" className="mt-12">
+        <h2 id="whatsapp" className="text-lg font-semibold">
+          WhatsApp
+        </h2>
+        <p className="mt-1 mb-6 max-w-2xl text-sm text-muted">
+          Buyers can send their order to this number from a product page or their cart, already
+          written out. The shop confirms availability in the chat.
+        </p>
+        <WhatsAppSettingsForm initial={whatsapp} />
+      </section>
 
       <section aria-labelledby="changes" className="mt-12">
         <h2 id="changes" className="text-[11px] font-medium tracking-wider text-muted uppercase">

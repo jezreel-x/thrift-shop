@@ -9,6 +9,8 @@ import { formatPrice } from "@/lib/money";
 import { readCart } from "@/lib/shop/cart-session";
 import { buildProductQuery } from "@/lib/shop/product-search-params";
 import { getProductBySlug } from "@/lib/shop/products";
+import { type Selection, resolveChoice } from "@/lib/shop/variant-choice";
+import { VariantPicker } from "@/components/variant-picker";
 
 export async function generateMetadata({
   params,
@@ -46,7 +48,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function ProductPage({ params }: PageProps<"/products/[slug]">) {
+export default async function ProductPage({ params, searchParams }: PageProps<"/products/[slug]">) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
 
@@ -54,12 +56,47 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
 
   const isSold = product.availability === "SOLD";
   const isReserved = product.availability === "RESERVED";
-  const sizes = product.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : []));
-  // One variant per product until the storefront offers a choice.
-  const variant = product.variants[0];
+
+  // What the buyer has picked, from the URL.
+  const raw = await searchParams;
+  const pick = (value: string | string[] | undefined) =>
+    typeof value === "string" ? value : Array.isArray(value) ? value[0] : undefined;
+  const selection: Selection = { option1: pick(raw.option1), option2: pick(raw.option2) };
+
+  const choice = resolveChoice({
+    variants: product.variants,
+    swatches: product.swatches,
+    option2Order: product.categoryRef?.option2Values ?? [],
+    basePriceCents: product.priceCents,
+    selection,
+  });
+  const selectedSwatch = choice.swatches.find((swatch) => swatch.selected);
+  const hasChoices = choice.swatches.length > 0 || choice.option2.length > 1;
+  const variant = choice.variant;
+  // "Only N left" for shop stock. A thrift item is always the last one, and the
+  // page already says it is one of one.
+  const fewLeft =
+    variant &&
+    choice.free > 0 &&
+    choice.free <= 3 &&
+    (variant.stock > 1 || product.variants.length > 1)
+      ? choice.free
+      : null;
+
+  // Photos of the chosen colour, plus those of every colour; all of them when
+  // the colour has none of its own.
+  const ofSwatch = product.images.filter(
+    (image) => image.swatchId === null || image.swatchId === selectedSwatch?.id,
+  );
+  const images = ofSwatch.length > 0 ? ofSwatch : product.images;
 
   const cart = await readCart();
-  const inCart = cart?.lines.some((line) => line.variantId === variant?.id) ?? false;
+  const inCartQuantity = cart?.lines.find((line) => line.variantId === variant?.id)?.quantity ?? 0;
+  const option2Name = product.categoryRef?.option2Name ?? "Size";
+  const needs =
+    choice.needs === "option1"
+      ? `a ${(product.categoryRef?.option1Name ?? "colour").toLowerCase()}`
+      : `a ${option2Name.toLowerCase()}`;
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -71,7 +108,7 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
       </Link>
 
       <div className="mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-12">
-        <ProductGallery images={product.images} title={product.title} />
+        <ProductGallery images={images} title={product.title} />
 
         <div className="mt-8 lg:mt-0">
           {(isSold || isReserved) && (
@@ -93,8 +130,25 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
               isSold ? "text-neutral-400 line-through dark:text-neutral-600" : ""
             }`}
           >
-            {formatPrice(product.priceCents)}
+            {choice.priceIsFrom ? "From " : ""}
+            {formatPrice(choice.priceCents)}
           </p>
+
+          {hasChoices && (
+            <VariantPicker
+              pathname={`/products/${product.slug}`}
+              choice={choice}
+              option1Name={product.categoryRef?.option1Name ?? null}
+              option2Name={product.categoryRef?.option2Name ?? null}
+            />
+          )}
+
+          {fewLeft !== null && (
+            <p className="mt-4 text-sm font-medium text-amber-700 dark:text-amber-400">
+              Only {fewLeft} left
+              {variant?.option2 && choice.option2.length > 1 ? ` in ${variant.option2}` : ""}
+            </p>
+          )}
 
           {product.description && (
             <p className="mt-6 text-pretty text-neutral-600 dark:text-neutral-400">
@@ -103,7 +157,9 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
           )}
 
           <dl className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-neutral-200 pt-6 text-sm dark:border-neutral-800">
-            {sizes.length > 0 && <Fact label="Size" value={sizes.join(", ")} />}
+            {!hasChoices && variant?.option2 && (
+              <Fact label={option2Name} value={variant.option2} />
+            )}
             {product.condition && product.categoryRef?.showCondition !== false && (
               <Fact label="Condition" value={CONDITION_LABELS[product.condition]} />
             )}
@@ -142,14 +198,17 @@ export default async function ProductPage({ params }: PageProps<"/products/[slug
           </div>
 
           <div className="mt-6">
-            {variant ? (
-              <AddToCart variantId={variant.id} inCart={inCart} disabled={isSold} />
-            ) : null}
+            <AddToCart
+              variantId={variant?.id ?? null}
+              maxQuantity={variant ? Math.min(choice.free, 5) : 0}
+              inCartQuantity={inCartQuantity}
+              needs={needs}
+            />
           </div>
         </div>
       </div>
 
-      <ProductStructuredData product={product} />
+      <ProductStructuredData product={product} priceCents={choice.priceCents} />
     </main>
   );
 }
@@ -173,8 +232,11 @@ function Fact({ label, value }: { label: string; value: string }) {
  */
 function ProductStructuredData({
   product,
+  priceCents,
 }: {
   product: NonNullable<Awaited<ReturnType<typeof getProductBySlug>>>;
+  /** The chosen variant price, or the "From" price. */
+  priceCents: number;
 }) {
   const data = {
     "@context": "https://schema.org",
@@ -190,7 +252,7 @@ function ProductStructuredData({
         : "https://schema.org/UsedCondition",
     offers: {
       "@type": "Offer",
-      price: (product.priceCents / 100).toFixed(2),
+      price: (priceCents / 100).toFixed(2),
       priceCurrency: "KES",
       availability:
         product.availability === "AVAILABLE"

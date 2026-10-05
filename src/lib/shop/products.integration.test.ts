@@ -424,3 +424,47 @@ describe("categories as data", () => {
     }
   });
 });
+
+describe("storefront with variants", () => {
+  /** Cargo Pants: waist 32 and 34 in stock, 36 sold out; 34 costs more. */
+  async function cargoPants() {
+    const product = await makeProduct({ slug: "cargo-pants", priceCents: 140_000, size: "32" });
+    const base = await db.productVariant.findFirstOrThrow({ where: { productId: product.id } });
+    await db.productVariant.update({ where: { id: base.id }, data: { stock: 3 } });
+    await db.productVariant.create({
+      data: { productId: product.id, option2: "34", stock: 2, priceCents: 160_000 },
+    });
+    await db.productVariant.create({ data: { productId: product.id, option2: "36", stock: 0 } });
+    return product;
+  }
+
+  it("filters by a size only where that size is in stock", async () => {
+    await cargoPants();
+
+    expect((await listProducts({ filters: { sizes: ["34"] } })).items).toHaveLength(1);
+    expect((await listProducts({ filters: { sizes: ["36"] } })).items).toHaveLength(0);
+  });
+
+  it("shows a From price, and lets the price filter see each variant's price", async () => {
+    await cargoPants();
+
+    const [card] = (await listProducts()).items;
+    expect(card).toMatchObject({ fromPriceCents: 140_000, priceVaries: true });
+
+    // Only the 34, at KSh 1,600, is in this range.
+    const pricey = await listProducts({ filters: { minPriceCents: 150_000 } });
+    expect(pricey.items.map((item) => item.slug)).toEqual(["cargo-pants"]);
+    const tooCheap = await listProducts({ filters: { maxPriceCents: 100_000 } });
+    expect(tooCheap.items).toHaveLength(0);
+  });
+
+  it("offers quick add only when there is nothing to choose", async () => {
+    await cargoPants();
+    await makeProduct({ slug: "thrift-tee" });
+
+    const cards = new Map((await listProducts()).items.map((item) => [item.slug, item]));
+
+    expect(cards.get("cargo-pants")?.quickAdd).toBeNull();
+    expect(cards.get("thrift-tee")?.quickAdd).toMatchObject({ maxQuantity: 1 });
+  });
+});

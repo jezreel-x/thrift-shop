@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CartLine } from "@/lib/shop/cart";
 import { removeFromCartAction } from "@/lib/shop/cart-actions";
 import { readCart } from "@/lib/shop/cart-session";
+import { QuantityStepper } from "@/components/quantity-stepper";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {
@@ -27,6 +28,8 @@ export default async function CartPage() {
   if (lines.length === 0) return <EmptyCart />;
 
   const unavailable = lines.filter((line) => !line.available);
+  // Units that can be paid for: two of one shirt count as two pieces.
+  const units = lines.reduce((sum, line) => sum + line.quantityAvailable, 0);
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -43,7 +46,7 @@ export default async function CartPage() {
 
       <div className="mt-8 flex items-baseline justify-between">
         <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          {cart!.availableCount} {cart!.availableCount === 1 ? "piece" : "pieces"} available
+          {units} {units === 1 ? "piece" : "pieces"} available
         </span>
         <span className="text-xl font-semibold">{formatPrice(cart!.totalCents)}</span>
       </div>
@@ -105,10 +108,27 @@ function CartRow({ line }: { line: CartLine }) {
         </Link>
         <span className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
           {[line.swatch, line.size].filter(Boolean).join(" · ")}
-          {line.quantity > 1 && ` · ×${line.quantity}`}
         </span>
 
         {!line.available && <UnavailableNote reason={line.reason} />}
+
+        {line.available && line.quantityAvailable < line.quantity && (
+          <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+            Only {line.quantityAvailable} left. Checkout will hold {line.quantityAvailable}, not{" "}
+            {line.quantity}.
+          </p>
+        )}
+
+        {line.available && (line.maxQuantity > 1 || line.quantity > 1) && (
+          <div className="mt-2">
+            <QuantityStepper
+              variantId={line.variantId}
+              quantity={line.quantity}
+              max={line.maxQuantity}
+              label={[line.title, line.swatch, line.size].filter(Boolean).join(", ")}
+            />
+          </div>
+        )}
 
         <form action={removeFromCartAction} className="mt-auto pt-2">
           <input type="hidden" name="variantId" value={line.variantId} />
@@ -124,7 +144,7 @@ function CartRow({ line }: { line: CartLine }) {
       <span
         className={`font-medium ${line.available ? "" : "text-neutral-400 line-through dark:text-neutral-600"}`}
       >
-        {formatPrice(line.priceCents * line.quantity)}
+        {formatPrice(line.priceCents * (line.available ? line.quantityAvailable : line.quantity))}
       </span>
     </li>
   );

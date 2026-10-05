@@ -5,8 +5,11 @@ import {
   AVAILABILITY_RANK,
   type ProductAvailability,
   type VariantAvailability,
+  freeUnits,
+  maxQuantity,
   productAvailability,
 } from "./availability";
+import { effectivePrice, priceSummary } from "./variant-choice";
 import { getAvailability } from "./reservations";
 
 /**
@@ -53,6 +56,7 @@ const cardSelect = {
   createdAt: true,
   categoryRef: { select: { slug: true, name: true, showCondition: true } },
   variants: { select: { id: true, option2: true }, orderBy: { createdAt: "asc" } },
+  swatches: { select: { name: true, hex: true }, orderBy: { position: "asc" } },
   images: {
     select: { url: true, alt: true, width: true, height: true },
     orderBy: { position: "asc" },
@@ -67,6 +71,15 @@ export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }
   availability: ProductAvailability;
   /** Every option-2 value the product comes in, for the card's subtitle. */
   sizes: string[];
+  /** The lowest price among what can still be bought — the card's figure. */
+  fromPriceCents: number;
+  /** Variants differ in price, so the card says "From". */
+  priceVaries: boolean;
+  /**
+   * The one variant, when there is nothing to choose: the card can add it to a
+   * cart directly. Null when the buyer must pick a colour or size first.
+   */
+  quickAdd: { variantId: string; maxQuantity: number } | null;
 };
 
 export type ProductListPage = {
@@ -102,24 +115,48 @@ export async function listProducts({
       id: true,
       priceCents: true,
       createdAt: true,
-      variants: { select: { id: true } },
+      variants: { select: { id: true, priceCents: true } },
     },
   });
 
   const availability = await getAvailability(
     candidates.flatMap((product) => product.variants.map((variant) => variant.id)),
   );
-  const stateOf = (variantIds: { id: string }[]) =>
-    productAvailability(variantIds.map(({ id }) => availability.get(id) ?? NO_STOCK));
 
   const ranked = candidates
-    .map((product) => ({ ...product, state: stateOf(product.variants) }))
+    .map((product) => {
+      const variants = product.variants.map((variant) => ({
+        ...variant,
+        ...(availability.get(variant.id) ?? NO_STOCK),
+      }));
+      const summary = priceSummary(variants, product.priceCents);
+
+      return {
+        id: product.id,
+        createdAt: product.createdAt,
+        // Sorting and the card both use the "From" price: the lowest among what
+        // can still be bought.
+        priceCents: summary.priceCents,
+        priceVaries: summary.varies,
+        state: productAvailability(variants),
+        variants,
+        basePriceCents: product.priceCents,
+      };
+    })
+    .filter((product) =>
+      inPriceRange(
+        product.variants,
+        product.basePriceCents,
+        filters.minPriceCents,
+        filters.maxPriceCents,
+      ),
+    )
     .sort((a, b) => compareFor(sort)(a, b));
 
   const pageIds = ranked
     .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
     .map((product) => product.id);
-  const stateById = new Map(ranked.map((product) => [product.id, product.state]));
+  const rankedById = new Map(ranked.map((product) => [product.id, product]));
 
   const cards = await prisma.product.findMany({
     where: { id: { in: pageIds } },
@@ -129,13 +166,24 @@ export async function listProducts({
 
   const items = pageIds.flatMap((id) => {
     const card = byId.get(id);
-    if (!card) return [];
+    const summary = rankedById.get(id);
+    if (!card || !summary) return [];
+
+    const only = summary.variants.length === 1 ? summary.variants[0] : null;
 
     return [
       {
         ...card,
-        availability: stateById.get(id) ?? "SOLD",
-        sizes: card.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : [])),
+        availability: summary.state,
+        // Once each: a size made in three colours is still one size.
+        sizes: [
+          ...new Set(
+            card.variants.flatMap((variant) => (variant.option2 ? [variant.option2] : [])),
+          ),
+        ],
+        fromPriceCents: summary.priceCents,
+        priceVaries: summary.priceVaries,
+        quickAdd: only ? { variantId: only.id, maxQuantity: maxQuantity(only) } : null,
       },
     ];
   });
@@ -160,10 +208,12 @@ export async function getProductBySlug(slug: string) {
     include: {
       images: { orderBy: { position: "asc" } },
       categoryRef: true,
+      swatches: { orderBy: { position: "asc" }, select: { id: true, name: true, hex: true } },
       variants: {
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
+          swatchId: true,
           option2: true,
           priceCents: true,
           swatch: { select: { id: true, name: true, hex: true } },
@@ -200,22 +250,17 @@ export async function listSitemapEntries(): Promise<{ slug: string; updatedAt: D
 }
 
 function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
-  const { sizes, categories, conditions, genders, minPriceCents, maxPriceCents, search } = filters;
+  const { sizes, categories, conditions, genders, search } = filters;
   const where: Prisma.ProductWhereInput = { deletedAt: null };
 
-  // Any variant in one of the sizes, sold out or not: the catalogue shows sold
-  // pieces, so a size filter must find them too.
-  if (sizes?.length) where.variants = { some: { option2: { in: sizes } } };
+  // In stock in one of the sizes, in any colour: someone filtering by their
+  // size wants what they could buy. Sold pieces still show when browsing.
+  if (sizes?.length) where.variants = { some: { option2: { in: sizes }, stock: { gt: 0 } } };
   if (categories?.length) where.categoryRef = { slug: { in: categories } };
   if (conditions?.length) where.condition = { in: conditions };
   if (genders?.length) where.gender = { in: genders };
 
-  if (minPriceCents !== undefined || maxPriceCents !== undefined) {
-    where.priceCents = {
-      ...(minPriceCents !== undefined ? { gte: minPriceCents } : {}),
-      ...(maxPriceCents !== undefined ? { lte: maxPriceCents } : {}),
-    };
-  }
+  // Price is filtered after availability is known: see inPriceRange.
 
   const term = search?.trim();
   if (term) {
@@ -234,6 +279,29 @@ function whereFor(filters: ProductFilters): Prisma.ProductWhereInput {
 }
 
 const NO_STOCK: VariantAvailability = { stock: 0, heldByOthers: 0 };
+
+/**
+ * Whether a product has something in the price range: a variant that can be
+ * bought at a price within it (or, for a sold-out product, any variant, so
+ * sold pieces still appear at their price). Prices differ by variant now — the
+ * XXL may cost more — so the product's base price alone would be wrong.
+ */
+function inPriceRange(
+  variants: (VariantAvailability & { priceCents: number | null })[],
+  baseCents: number,
+  min: number | undefined,
+  max: number | undefined,
+): boolean {
+  if (min === undefined && max === undefined) return true;
+
+  const buyable = variants.filter((variant) => freeUnits(variant) > 0);
+  const pool = buyable.length > 0 ? buyable : variants;
+
+  return pool.some((variant) => {
+    const price = effectivePrice(variant, baseCents);
+    return (min === undefined || price >= min) && (max === undefined || price <= max);
+  });
+}
 
 type Rankable = { id: string; priceCents: number; createdAt: Date; state: ProductAvailability };
 

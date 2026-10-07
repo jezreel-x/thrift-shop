@@ -208,7 +208,7 @@ function UnavailableNote({ reason }: { reason: CartLine["reason"] }) {
     reason === "sold"
       ? "Sold — this one is gone."
       : reason === "held"
-        ? "Someone is checking out with this. It may come back shortly."
+        ? "Reserved for another buyer. It comes back if they don't buy it."
         : "No longer listed.";
 
   return <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">{message}</p>;

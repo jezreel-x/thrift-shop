@@ -29,7 +29,11 @@ export type AuditAction =
   | "product.add-photo"
   | "product.update-photo"
   | "product.reorder-photos"
-  | "product.remove-photo";
+  | "product.remove-photo"
+  | "stock.sold-elsewhere"
+  | "stock.hold"
+  | "stock.sell-hold"
+  | "stock.release-hold";
 
 export type AuditEntityType = "User" | "StaffRole" | "Order" | "Product" | "ShopSettings";
 

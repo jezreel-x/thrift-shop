@@ -102,11 +102,15 @@ model Product {
   // is.
   //
   // Buyers filter by size before anything else, hence the composite index below.
-  size String
+  //
+  // Superseded by ProductVariant.option2. Optional so new products need not
+  // invent a value; dropped in the contract migration.
+  size String?
 
-  // The old fixed list. Still written until the contract migration; the shop
-  // reads categoryId.
-  category Category
+  // The old fixed list. Nothing reads it — the shop reads categoryId — and
+  // products created in the admin leave it empty. Dropped in the contract
+  // migration.
+  category Category?
 
   // The category as data: its name, its options and its size list. Optional
   // only until the contract migration, after the backfill has set every row.

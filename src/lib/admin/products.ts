@@ -131,7 +131,7 @@ export type ProductFormValues = {
   held: Record<string, number>;
   /** Variants on past orders: removing them keeps them, at stock 0. */
   onOrders: string[];
-  /** The first photo, until photos can be managed here. */
+  /** The main photo, shown beside the title. */
   thumbnail: { url: string; alt: string } | null;
   /** Changes whenever the product is saved; remounts the form with fresh data. */
   version: string;

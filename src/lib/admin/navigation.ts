@@ -50,7 +50,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         label: "Products",
         icon: "products",
         permission: Permission.PRODUCTS_VIEW,
-        ready: false,
+        ready: true,
       },
       {
         href: "/admin/customers",

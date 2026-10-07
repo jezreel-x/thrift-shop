@@ -4,9 +4,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ProductForm } from "@/components/admin/product-form";
+import { ProductPhotos } from "@/components/admin/product-photos";
 import { WithdrawProduct } from "@/components/admin/withdraw-product";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
+import { listPhotos } from "@/lib/admin/photos";
 import { staffTitle } from "@/lib/admin/metadata";
 import { CONDITION_OPTIONS, GENDER_OPTIONS } from "@/lib/admin/product-options";
 import { getProductForEdit } from "@/lib/admin/products";
@@ -33,12 +35,21 @@ export default async function EditProductPage({ params, searchParams }: Props) {
   const { id } = await params;
   await requirePermission(Permission.PRODUCTS_EDIT, `/admin/products/${id}`);
 
-  const [product, categories, query] = await Promise.all([
+  const [product, categories, photos, query] = await Promise.all([
     getProductForEdit(id),
     listCategories(),
+    listPhotos(id),
     searchParams,
   ]);
   if (!product) notFound();
+
+  const category = categories.find((candidate) => candidate.id === product.categoryId);
+  // Saved colours only: a photo can be tagged with a colour once it exists.
+  const swatches = product.grid.swatches.map((swatch) => ({
+    id: swatch.key,
+    name: swatch.name,
+    hex: swatch.hex || null,
+  }));
 
   const notice = typeof query.notice === "string" ? NOTICES[query.notice] : undefined;
   const kept = typeof query.kept === "string" && /^\d+$/.test(query.kept) ? Number(query.kept) : 0;
@@ -94,6 +105,15 @@ export default async function EditProductPage({ params, searchParams }: Props) {
       )}
 
       <div className="mt-8">
+        <ProductPhotos
+          productId={product.id!}
+          photos={photos}
+          swatches={category?.option1Name ? swatches : []}
+          colourLabel={category?.option1Name ?? "Colour"}
+        />
+      </div>
+
+      <div className="mt-12">
         <ProductForm
           // A fresh form after each save: new cells now have ids and stock.
           key={product.version}

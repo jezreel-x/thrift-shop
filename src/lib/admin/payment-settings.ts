@@ -2,6 +2,7 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import { formatPhone, normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 import { recordAudit } from "./audit";
+import { describeDeliveryChanges } from "./delivery-settings";
 
 /**
  * Where buyers send money, as set by the owner.
@@ -271,13 +272,18 @@ export type PaymentSettingsChange = {
   changes: string[];
 };
 
-/** The latest changes to the payment settings, newest first. */
+/** The latest changes to payment, WhatsApp and delivery settings, newest first. */
 export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSettingsChange[]> {
   const entries = await prisma.auditLog.findMany({
     where: {
       entityType: "ShopSettings",
       action: {
-        in: ["settings.update-payment", "settings.clear-payment", "settings.update-whatsapp"],
+        in: [
+          "settings.update-payment",
+          "settings.clear-payment",
+          "settings.update-whatsapp",
+          "settings.update-delivery",
+        ],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -306,7 +312,9 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
                 asRecord(entry.after)?.whatsappNumber,
               )}`,
             ]
-          : describeChanges(asRecord(entry.before), asRecord(entry.after)),
+          : entry.action === "settings.update-delivery"
+            ? describeDeliveryChanges(asRecord(entry.before), asRecord(entry.after))
+            : describeChanges(asRecord(entry.before), asRecord(entry.after)),
   }));
 }
 

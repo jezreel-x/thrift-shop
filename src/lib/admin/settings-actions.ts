@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "./access";
 import {
+  type AreaInput,
+  getDeliverySettings,
+  parseDeliverySettings,
+  saveDeliverySettings,
+} from "./delivery-settings";
+import { centsToInput } from "./products";
+import {
   type PaymentSettingsField,
   clearPaymentSettings,
   parsePaymentSettings,
@@ -68,4 +75,63 @@ export async function saveWhatsAppAction(
   revalidatePath("/admin/settings");
 
   return { saved: result.changed ? "changed" : "unchanged" };
+}
+
+export type DeliverySettingsFormState = {
+  errors?: Record<string, string>;
+  saved?: "changed" | "unchanged";
+  /** The list as saved, with ids for new rows, for the form to carry on from. */
+  areas?: { id: string; name: string; fee: string }[];
+};
+
+/**
+ * Saves pickup and the delivery areas. SETTINGS_EDIT: a fee is part of what
+ * every buyer who chooses that area is asked to pay.
+ */
+export async function saveDeliverySettingsAction(
+  _previous: DeliverySettingsFormState,
+  formData: FormData,
+): Promise<DeliverySettingsFormState> {
+  const { user } = await requirePermission(Permission.SETTINGS_EDIT);
+
+  let areas: AreaInput[];
+  try {
+    areas = JSON.parse(String(formData.get("areas") ?? "[]")) as AreaInput[];
+    if (
+      !Array.isArray(areas) ||
+      !areas.every(
+        (area) =>
+          (area.id === null || typeof area.id === "string") &&
+          typeof area.name === "string" &&
+          typeof area.fee === "string",
+      )
+    ) {
+      throw new Error("bad areas");
+    }
+  } catch {
+    return { errors: { areas: "The list could not be read. Reload and try again." } };
+  }
+
+  const parsed = parseDeliverySettings({
+    pickupAddress: String(formData.get("pickupAddress") ?? ""),
+    areas,
+  });
+  if (!parsed.ok) return { errors: parsed.errors };
+
+  const result = await saveDeliverySettings({ value: parsed.value, actorId: user.id });
+  if (!result.ok) return { errors: { areas: result.error } };
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/checkout");
+
+  const saved = await getDeliverySettings();
+
+  return {
+    saved: result.changed ? "changed" : "unchanged",
+    areas: saved.areas.map((area) => ({
+      id: area.id!,
+      name: area.name,
+      fee: centsToInput(area.feeCents),
+    })),
+  };
 }

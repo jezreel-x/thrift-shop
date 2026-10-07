@@ -191,8 +191,9 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
               </p>
             ) : isReserved ? (
               <p className="text-neutral-600 dark:text-neutral-400">
-                Someone is checking out with this piece. If they do not complete payment it returns
-                to the rail shortly.
+                {/* Held in a checkout or for a WhatsApp buyer: true of both. */}
+                Reserved for another buyer. If they don&apos;t complete the purchase, it comes back
+                on the shop.
               </p>
             ) : (
               <p className="text-neutral-600 dark:text-neutral-400">

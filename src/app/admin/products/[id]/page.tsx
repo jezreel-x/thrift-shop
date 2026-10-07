@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, Boxes, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -76,20 +76,29 @@ export default async function EditProductPage({ params, searchParams }: Props) {
         )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{product.title}</h1>
-          {product.withdrawn ? (
-            <p className="mt-0.5 text-sm text-amber-700 dark:text-amber-400">
-              Off the shop. Buyers can&apos;t see it.
-            </p>
-          ) : (
+          <p className="mt-0.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
             <Link
-              href={`/products/${product.slug}`}
-              target="_blank"
-              className="mt-0.5 inline-flex items-center gap-1 text-sm text-muted transition hover:text-foreground"
+              href={`/admin/products/${product.id}/stock`}
+              className="inline-flex items-center gap-1 transition hover:text-foreground"
             >
-              View on the shop
-              <ExternalLink aria-hidden className="size-3.5" />
+              <Boxes aria-hidden className="size-3.5" />
+              Stock &amp; holds
             </Link>
-          )}
+            {product.withdrawn ? (
+              <span className="text-amber-700 dark:text-amber-400">
+                Off the shop. Buyers can&apos;t see it.
+              </span>
+            ) : (
+              <Link
+                href={`/products/${product.slug}`}
+                target="_blank"
+                className="inline-flex items-center gap-1 transition hover:text-foreground"
+              >
+                View on the shop
+                <ExternalLink aria-hidden className="size-3.5" />
+              </Link>
+            )}
+          </p>
         </div>
       </div>
 

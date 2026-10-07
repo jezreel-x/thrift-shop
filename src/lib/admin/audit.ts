@@ -22,6 +22,7 @@ export type AuditAction =
   | "settings.update-payment"
   | "settings.clear-payment"
   | "settings.update-whatsapp"
+  | "settings.update-delivery"
   | "product.create"
   | "product.update"
   | "product.withdraw"

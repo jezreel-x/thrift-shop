@@ -11,6 +11,7 @@ import { staffTitle } from "@/lib/admin/metadata";
 import { getOrderForReview } from "@/lib/admin/orders";
 import { can } from "@/lib/admin/permissions";
 import { formatDateTime } from "@/lib/dates";
+import { OrderDelivery } from "@/components/order-delivery";
 import { formatPrice } from "@/lib/money";
 import { formatPhone } from "@/lib/phone";
 import { firstName, whatsAppLink } from "@/lib/whatsapp";
@@ -178,6 +179,16 @@ export default async function AdminOrderPage({ params }: Props) {
                   </li>
                 );
               })}
+              {order.fulfilment && (
+                <li className="flex justify-between p-4 text-sm">
+                  <span className="text-muted">
+                    {order.fulfilment === "PICKUP" ? "Pickup" : `Delivery to ${order.deliveryArea}`}
+                  </span>
+                  <span className="tabular-nums">
+                    {order.deliveryFeeCents === 0 ? "Free" : formatPrice(order.deliveryFeeCents)}
+                  </span>
+                </li>
+              )}
               <li className="flex justify-between p-4 font-medium">
                 <span>Total</span>
                 <span className="tabular-nums">{total}</span>
@@ -209,6 +220,20 @@ export default async function AdminOrderPage({ params }: Props) {
               </p>
             </div>
           </section>
+
+          {order.fulfilment && (
+            <section aria-labelledby="delivery">
+              <h2
+                id="delivery"
+                className="text-[11px] font-medium tracking-wider text-muted uppercase"
+              >
+                {order.fulfilment === "PICKUP" ? "Pickup" : "Delivery"}
+              </h2>
+              <div className="mt-3 rounded-xl border border-border bg-surface p-4 text-sm">
+                <OrderDelivery order={order} mutedClassName="text-muted" />
+              </div>
+            </section>
+          )}
 
           <section aria-labelledby="history">
             <h2

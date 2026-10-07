@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { db } from "@/test/db";
+import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { hashPassword } from "./password";
 import {
   SESSION_DAYS,
@@ -15,10 +15,9 @@ import {
 
 const MS_PER_DAY = 86_400_000;
 
-beforeEach(async () => {
-  // Sessions cascade from users, so removing users clears both.
-  await db.user.deleteMany();
-});
+// The shared reset, not `user.deleteMany()`: a user with orders cannot be
+// deleted, so that broke whenever an earlier file left an order behind.
+cleanDatabaseBetweenTests();
 
 async function makeUser(email = "grace@example.com") {
   return db.user.create({

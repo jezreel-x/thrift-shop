@@ -264,6 +264,16 @@ model User {
   // purchase gets abandoned.
   phone String?
 
+  // How they last wanted an order, pre-filled at the next checkout. Copied onto
+  // each order, so changing it later never rewrites one.
+  fulfilment      Fulfilment?
+  deliveryAreaId  String?
+  deliveryArea    DeliveryArea? @relation(fields: [deliveryAreaId], references: [id], onDelete: SetNull)
+  // "Kindaruma Rd, Blue Gate, opposite Naivas": riders go by landmarks.
+  deliveryAddress String?
+  // Who the rider calls, canonical 2547XXXXXXXX. Often not the buyer.
+  deliveryPhone   String?
+
   // Everyone is a customer. Being staff means holding at least one StaffRole;
   // there is no flag to set, so there is no flag to forget to unset.
   staffRoles StaffRoleAssignment[]
@@ -428,6 +438,19 @@ model Order {
   // from current prices.
   totalCents Int
 
+  // How the order reaches the buyer, copied at checkout. Null on orders placed
+  // before delivery was asked, and while the shop offers no choice.
+  fulfilment       Fulfilment?
+  // Where to collect it: the shop's pickup address at the time.
+  pickupAddress    String?
+  // The area's name, not a relation: renaming or removing an area later must
+  // not change where an old order went.
+  deliveryArea     String?
+  deliveryAddress  String?
+  deliveryPhone    String?
+  // Included in totalCents, which is what the buyer sends by M-Pesa.
+  deliveryFeeCents Int         @default(0)
+
   items OrderItem[]
 
   createdAt DateTime @default(now())
@@ -513,7 +536,35 @@ model ShopSettings {
   // opens a chat with the order already written. Null: the button is hidden.
   whatsappNumber String?
 
+  // Where buyers collect orders: "HH Towers, 4th floor, Shop 12". Null: the
+  // shop doesn't offer pickup.
+  pickupAddress String?
+
   updatedAt DateTime @updatedAt
+}
+
+// Collected from the shop, or brought to the buyer.
+enum Fulfilment {
+  PICKUP
+  DELIVERY
+}
+
+// Where the shop delivers, and what it charges there. The owner's list, in
+// Settings: "Westlands — KSh 250", "CBD — KSh 150". Riders and fees go by area,
+// not by street address, so the buyer picks one and adds a landmark.
+model DeliveryArea {
+  id       String @id @default(cuid())
+  name     String @unique
+  feeCents Int
+  position Int    @default(0)
+
+  // Buyers whose remembered address is here; cleared if the area is removed.
+  users User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
 }
 
 enum PaymentMethod {

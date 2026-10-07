@@ -1,5 +1,6 @@
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { prisma } from "../prisma";
+import type { DeliveryOptions } from "./delivery";
 
 /**
  * Settings the shop owner controls, rather than whoever deploys.
@@ -77,4 +78,20 @@ export async function getShopWhatsApp(): Promise<string | null> {
   });
 
   return settings?.whatsappNumber ?? null;
+}
+
+/**
+ * Pickup and the delivery areas with their fees, as the owner set them in
+ * Settings. Neither set: checkout asks nothing about delivery.
+ */
+export async function getDeliveryOptions(): Promise<DeliveryOptions> {
+  const [settings, areas] = await Promise.all([
+    prisma.shopSettings.findUnique({ where: { id: SINGLETON }, select: { pickupAddress: true } }),
+    prisma.deliveryArea.findMany({
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, feeCents: true },
+    }),
+  ]);
+
+  return { pickupAddress: settings?.pickupAddress ?? null, areas };
 }

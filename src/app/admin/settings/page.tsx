@@ -1,8 +1,10 @@
+import { DeliverySettingsForm } from "@/components/admin/delivery-settings-form";
 import { PaymentSettingsForm } from "@/components/admin/payment-settings-form";
 import { RemovePaymentDetails } from "@/components/admin/remove-payment-details";
 import { WhatsAppSettingsForm } from "@/components/admin/whatsapp-settings-form";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
+import { getDeliverySettings } from "@/lib/admin/delivery-settings";
 import { staffTitle } from "@/lib/admin/metadata";
 import {
   getPaymentSettingsFormValues,
@@ -10,6 +12,7 @@ import {
   listPaymentSettingsHistory,
 } from "@/lib/admin/payment-settings";
 import { formatDateTime } from "@/lib/dates";
+import { centsToInput } from "@/lib/admin/products";
 import { PAYMENT_INSTRUCTIONS, PAYMENT_NUMBER_LABELS } from "@/lib/shop/settings";
 
 export const generateMetadata = staffTitle("Settings", Permission.SETTINGS_EDIT);
@@ -17,10 +20,11 @@ export const generateMetadata = staffTitle("Settings", Permission.SETTINGS_EDIT)
 export default async function AdminSettingsPage() {
   await requirePermission(Permission.SETTINGS_EDIT, "/admin/settings");
 
-  const [initial, history, whatsapp] = await Promise.all([
+  const [initial, history, whatsapp, delivery] = await Promise.all([
     getPaymentSettingsFormValues(),
     listPaymentSettingsHistory(),
     getWhatsAppFormValue(),
+    getDeliverySettings(),
   ]);
   const hasDetails = Boolean(initial.method || initial.number || initial.name);
 
@@ -61,6 +65,26 @@ export default async function AdminSettingsPage() {
           written out. The shop confirms availability in the chat.
         </p>
         <WhatsAppSettingsForm initial={whatsapp} />
+      </section>
+
+      <section aria-labelledby="delivery" className="mt-12">
+        <h2 id="delivery" className="text-lg font-semibold">
+          Pickup and delivery
+        </h2>
+        <p className="mt-1 mb-6 max-w-2xl text-sm text-muted">
+          What checkout offers. Set neither and buyers aren&apos;t asked; you arrange it with them
+          as before.
+        </p>
+        <DeliverySettingsForm
+          initial={{
+            pickupAddress: delivery.pickupAddress ?? "",
+            areas: delivery.areas.map((area) => ({
+              id: area.id!,
+              name: area.name,
+              fee: centsToInput(area.feeCents),
+            })),
+          }}
+        />
       </section>
 
       <section aria-labelledby="changes" className="mt-12">

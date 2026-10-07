@@ -3,18 +3,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ContactForm } from "@/components/contact-form";
+import { DeliveryForm } from "@/components/delivery-form";
+import { OrderDelivery } from "@/components/order-delivery";
 import { PaymentClaimForm } from "@/components/payment-claim-form";
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { readCartId } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
 import { formatPhone } from "@/lib/phone";
+import { offersChoice, rememberedChoice } from "@/lib/shop/delivery";
 import { beginCheckout } from "@/lib/shop/orders";
 import { prisma } from "@/lib/prisma";
 import {
   PAYMENT_INSTRUCTIONS,
   PAYMENT_NUMBER_LABELS,
   type PaymentDetails,
+  getDeliveryOptions,
   getPaymentDetails,
 } from "@/lib/shop/settings";
 import { RESERVATION_MINUTES } from "@/lib/shop/reservations";
@@ -31,7 +35,7 @@ export const metadata: Metadata = {
  * still be held, which is the moment a shortlist becomes a claim. Re-entering
  * finds the same order and extends the same holds rather than opening a second.
  */
-export default async function CheckoutPage() {
+export default async function CheckoutPage({ searchParams }: PageProps<"/checkout">) {
   // The first point in the shop that requires an account: a reservation has to
   // belong to somebody, and an order settled by hand needs a person to contact.
   const user = await requireUser("/checkout");
@@ -54,10 +58,58 @@ export default async function CheckoutPage() {
     );
   }
 
-  const result = await beginCheckout(user.id, cartId, {
-    name: user.name ?? user.email,
-    phone: user.phone,
-  });
+  // Then how it reaches them, for the same reason: asked before the hold
+  // starts, remembered for next time. Only when the shop offers a choice.
+  const [options, remembered, query] = await Promise.all([
+    getDeliveryOptions(),
+    prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: {
+        fulfilment: true,
+        deliveryAreaId: true,
+        deliveryAddress: true,
+        deliveryPhone: true,
+      },
+    }),
+    searchParams,
+  ]);
+  const changing = query.change === "delivery";
+  const delivery = offersChoice(options) ? rememberedChoice(remembered, options) : null;
+
+  if (offersChoice(options) && (!delivery || changing)) {
+    return (
+      <main className="mx-auto w-full max-w-md flex-1 px-6 py-12">
+        <h1 className="text-2xl font-semibold tracking-tight">Pickup or delivery</h1>
+        <p className="mt-2 mb-8 text-sm text-neutral-600 dark:text-neutral-400">
+          We remember it for next time.
+        </p>
+        <DeliveryForm
+          options={options}
+          initial={{
+            fulfilment: remembered.fulfilment ?? "",
+            area: remembered.deliveryAreaId ?? "",
+            address: remembered.deliveryAddress ?? "",
+            phone: formatPhone(remembered.deliveryPhone ?? user.phone),
+          }}
+        />
+        {delivery && (
+          <Link
+            href="/checkout"
+            className="mt-6 block text-center text-sm text-neutral-500 underline-offset-4 hover:underline dark:text-neutral-400"
+          >
+            Keep what I had
+          </Link>
+        )}
+      </main>
+    );
+  }
+
+  const result = await beginCheckout(
+    user.id,
+    cartId,
+    { name: user.name ?? user.email, phone: user.phone },
+    delivery,
+  );
 
   if (!result.ok) redirect("/cart");
 
@@ -151,10 +203,37 @@ async function OrderSummary({ orderId }: { orderId: string }) {
         ))}
       </ul>
 
+      {order.fulfilment && (
+        <dl className="mt-4 space-y-1 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-neutral-600 dark:text-neutral-400">Items</dt>
+            <dd>{formatPrice(order.totalCents - order.deliveryFeeCents)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-neutral-600 dark:text-neutral-400">
+              {order.fulfilment === "PICKUP" ? "Pickup" : `Delivery to ${order.deliveryArea}`}
+            </dt>
+            <dd>{order.deliveryFeeCents === 0 ? "Free" : formatPrice(order.deliveryFeeCents)}</dd>
+          </div>
+        </dl>
+      )}
+
       <div className="mt-4 flex items-baseline justify-between">
         <span className="font-medium">Total</span>
         <span className="text-xl font-semibold">{formatPrice(order.totalCents)}</span>
       </div>
+
+      {order.fulfilment && (
+        <div className="mt-6 flex items-start justify-between gap-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+          <OrderDelivery order={order} />
+          <Link
+            href="/checkout?change=delivery"
+            className="shrink-0 text-sm underline underline-offset-4"
+          >
+            Change
+          </Link>
+        </div>
+      )}
     </section>
   );
 }

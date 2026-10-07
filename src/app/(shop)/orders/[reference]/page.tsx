@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { OrderBadge } from "@/components/order-badge";
 import { OrderStatus } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
+import { OrderDelivery } from "@/components/order-delivery";
 import { formatPrice } from "@/lib/money";
 import { getOrder } from "@/lib/shop/orders";
 
@@ -75,10 +76,25 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
         ))}
       </ul>
 
+      {order.fulfilment && (
+        <div className="mt-4 flex justify-between text-sm">
+          <span className="text-neutral-600 dark:text-neutral-400">
+            {order.fulfilment === "PICKUP" ? "Pickup" : `Delivery to ${order.deliveryArea}`}
+          </span>
+          <span>{order.deliveryFeeCents === 0 ? "Free" : formatPrice(order.deliveryFeeCents)}</span>
+        </div>
+      )}
+
       <div className="mt-4 flex items-baseline justify-between">
         <span className="font-medium">Total</span>
         <span className="text-xl font-semibold">{formatPrice(order.totalCents)}</span>
       </div>
+
+      {order.fulfilment && (
+        <div className="mt-6 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+          <OrderDelivery order={order} />
+        </div>
+      )}
 
       {order.mpesaCode && (
         <p className="mt-6 text-sm text-neutral-500 dark:text-neutral-400">

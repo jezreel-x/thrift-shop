@@ -20,10 +20,11 @@ import { prisma } from "@/lib/prisma";
  */
 export async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(
-    // StaffRole and ShopSettings are listed because nothing in them references
-    // User, so the cascade from User would leave them behind between tests.
+    // StaffRole, ShopSettings and DeliveryArea are listed because nothing in
+    // them references User, so the cascade from User would leave them behind
+    // between tests.
     `TRUNCATE TABLE "ProductStatusHistory", "ProductImage", "Product", "Session", "User", ` +
-      `"StaffRole", "AuditLog", "ShopSettings" RESTART IDENTITY CASCADE`,
+      `"StaffRole", "AuditLog", "ShopSettings", "DeliveryArea" RESTART IDENTITY CASCADE`,
   );
 }
 

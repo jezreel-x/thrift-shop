@@ -711,6 +711,12 @@ model StockHold {
   // 15 minutes at checkout; 24 hours once payment is claimed.
   expiresAt DateTime
 
+  // Holds placed by staff for a buyer on WhatsApp: who it is for ("Achieng,
+  // 0712…") and who placed it. Null for a buyer's own checkout hold, which is
+  // identified by its holder. Not a relation, like StockMovement.actorId.
+  note       String?
+  placedById String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

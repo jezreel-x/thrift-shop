@@ -25,7 +25,11 @@ export type AuditAction =
   | "product.create"
   | "product.update"
   | "product.withdraw"
-  | "product.restore";
+  | "product.restore"
+  | "product.add-photo"
+  | "product.update-photo"
+  | "product.reorder-photos"
+  | "product.remove-photo";
 
 export type AuditEntityType = "User" | "StaffRole" | "Order" | "Product" | "ShopSettings";
 

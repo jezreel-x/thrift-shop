@@ -6,7 +6,9 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "../auth/current-user";
 import { clearCart } from "./cart";
 import { readCartId } from "./cart-session";
+import { type DeliveryField, parseDeliveryForm } from "./delivery";
 import { claimPayment } from "./orders";
+import { getDeliveryOptions } from "./settings";
 import { normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 
@@ -100,6 +102,50 @@ export async function saveContactAction(
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { name, phone } });
+
+  redirect("/checkout");
+}
+
+export type DeliveryFormState = { errors?: Partial<Record<DeliveryField, string>> };
+
+/**
+ * How the buyer wants this order: pickup, or delivery to an area.
+ *
+ * Saved to the account before anything is reserved, for the same reason as the
+ * phone number, and so the next order only has to confirm it.
+ */
+export async function saveDeliveryAction(
+  _previous: DeliveryFormState,
+  formData: FormData,
+): Promise<DeliveryFormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in?next=%2Fcheckout");
+
+  const parsed = parseDeliveryForm(
+    {
+      fulfilment: String(formData.get("fulfilment") ?? ""),
+      area: String(formData.get("area") ?? ""),
+      address: String(formData.get("address") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+    },
+    await getDeliveryOptions(),
+  );
+  if (!parsed.ok) return { errors: parsed.errors };
+
+  const { choice } = parsed;
+  await prisma.user.update({
+    where: { id: user.id },
+    data:
+      choice.fulfilment === "DELIVERY"
+        ? {
+            fulfilment: choice.fulfilment,
+            deliveryAreaId: choice.area.id,
+            deliveryAddress: choice.address,
+            deliveryPhone: choice.phone,
+          }
+        : // The address is kept: picking up once doesn't mean forgetting home.
+          { fulfilment: choice.fulfilment },
+  });
 
   redirect("/checkout");
 }

@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
 
-import { OrderStatus } from "@/generated/prisma/enums";
+import { Fulfilment, OrderStatus } from "@/generated/prisma/enums";
 import { getCartContents } from "./cart";
+import { type DeliveryChoice, deliveryFee } from "./delivery";
 import { prisma } from "../prisma";
 import type { CartLine } from "./cart";
 import { holdForPaymentReview, reserveVariant } from "./reservations";
@@ -55,6 +56,8 @@ export async function beginCheckout(
   userId: string,
   cartId: string,
   buyer: { name: string; phone: string },
+  /** Null while the shop offers no choice: arranged with the buyer, as before. */
+  delivery: DeliveryChoice | null = null,
 ): Promise<CheckoutResult> {
   const cart = await getCartContents(cartId, userId);
 
@@ -84,7 +87,11 @@ export async function beginCheckout(
     return { ok: false, reason: "nothing-available" };
   }
 
-  const totalCents = held.reduce((sum, line) => sum + line.priceCents * line.quantity, 0);
+  // The delivery fee is part of what the buyer sends by M-Pesa, so it is part
+  // of the total staff check the payment against. Today's fee for the area.
+  const totalCents =
+    held.reduce((sum, line) => sum + line.priceCents * line.quantity, 0) + deliveryFee(delivery);
+  const fulfilment = toOrderDelivery(delivery);
 
   const order = await prisma.$transaction(async (tx) => {
     const open = await tx.order.findFirst({
@@ -103,6 +110,7 @@ export async function beginCheckout(
           totalCents,
           buyerName: buyer.name,
           buyerPhone: buyer.phone,
+          ...fulfilment,
           items: { create: held.map(toOrderItem) },
         },
       });
@@ -117,6 +125,7 @@ export async function beginCheckout(
         buyerName: buyer.name,
         buyerPhone: buyer.phone,
         totalCents,
+        ...fulfilment,
         items: { create: held.map(toOrderItem) },
       },
       select: { id: true, reference: true },
@@ -216,6 +225,22 @@ export async function listOrders(userId: string) {
     orderBy: { createdAt: "desc" },
     include: { items: { select: { title: true, priceCents: true } } },
   });
+}
+
+/**
+ * How the order reaches the buyer, copied onto it. Every field is written,
+ * nulls included, so an order re-entered after switching from delivery to
+ * pickup keeps nothing of the old address.
+ */
+function toOrderDelivery(choice: DeliveryChoice | null) {
+  return {
+    fulfilment: choice?.fulfilment ?? null,
+    pickupAddress: choice?.fulfilment === Fulfilment.PICKUP ? choice.pickupAddress : null,
+    deliveryArea: choice?.fulfilment === Fulfilment.DELIVERY ? choice.area.name : null,
+    deliveryAddress: choice?.fulfilment === Fulfilment.DELIVERY ? choice.address : null,
+    deliveryPhone: choice?.fulfilment === Fulfilment.DELIVERY ? choice.phone : null,
+    deliveryFeeCents: deliveryFee(choice),
+  };
 }
 
 /** The order line: a snapshot of what was agreed, so later edits never rewrite it. */

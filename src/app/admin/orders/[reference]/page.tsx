@@ -203,7 +203,18 @@ export default async function AdminOrderPage({ params }: Props) {
               Buyer
             </h2>
             <div className="mt-3 rounded-xl border border-border bg-surface p-4 text-sm">
-              <p className="font-medium">{order.buyerName}</p>
+              <p className="font-medium">
+                {can(access, Permission.CUSTOMERS_VIEW) ? (
+                  <Link
+                    href={`/admin/customers/${order.userId}`}
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {order.buyerName}
+                  </Link>
+                ) : (
+                  order.buyerName
+                )}
+              </p>
               <p className="mt-1 tabular-nums select-all">{formatPhone(order.buyerPhone)}</p>
               <p className="mt-1 break-all text-muted">{order.user.email}</p>
               <a

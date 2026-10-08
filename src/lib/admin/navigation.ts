@@ -57,7 +57,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         label: "Customers",
         icon: "customers",
         permission: Permission.CUSTOMERS_VIEW,
-        ready: false,
+        ready: true,
       },
     ],
   },

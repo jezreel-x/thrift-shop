@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { Category, Condition, Gender, ProductStatus } from "@/generated/prisma/enums";
+import { Condition, Gender } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { categoryIdFor } from "@/test/catalogue";
 import { db, cleanDatabaseBetweenTests } from "@/test/db";
@@ -17,35 +17,39 @@ let sequence = 0;
  * never leaks into assertions about sorting — a test that passes because rows
  * happened to be written in the right order is a test that proves nothing.
  */
-async function makeProduct(
-  // The unchecked form: fields by id (categoryId), as the helper links them.
-  overrides: Partial<Prisma.ProductUncheckedCreateInput> = {},
-) {
+/**
+ * Shorthand for what a test is about. `size` is the one variant's option 2;
+ * `availability` gives it stock 1 (available), stock 0 (sold out), or stock 1
+ * held by another shopper (reserved). Everything else goes on the product.
+ */
+type TestProduct = Partial<Omit<Prisma.ProductUncheckedCreateInput, "categoryId">> & {
+  size?: string;
+  /** A category slug. */
+  category?: string;
+  availability?: "AVAILABLE" | "RESERVED" | "SOLD";
+};
+
+async function makeProduct(overrides: TestProduct = {}) {
   sequence += 1;
-  // Written the old way for readability — a size and a status — and turned into
-  // what the shop now reads: one variant, its stock, and a live hold if reserved.
-  const { status, ...data } = overrides;
-  const size = typeof data.size === "string" ? data.size : "M";
+  const { size = "M", category = "t-shirts", availability, ...data } = overrides;
 
   const product = await db.product.create({
     data: {
       slug: `product-${sequence}`,
       title: `Product ${sequence}`,
       priceCents: 100_000,
-      size,
-      category: Category.T_SHIRTS,
       condition: Condition.GOOD,
       gender: Gender.UNISEX,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       ...data,
-      categoryId: await categoryIdFor((data.category as Category | undefined) ?? Category.T_SHIRTS),
+      categoryId: await categoryIdFor(category),
     },
   });
 
   const variant = await db.productVariant.create({
-    data: { productId: product.id, option2: size, stock: status === ProductStatus.SOLD ? 0 : 1 },
+    data: { productId: product.id, option2: size, stock: availability === "SOLD" ? 0 : 1 },
   });
-  if (status === ProductStatus.RESERVED) {
+  if (availability === "RESERVED") {
     await db.stockHold.create({
       data: {
         variantId: variant.id,
@@ -75,9 +79,9 @@ describe("listProducts — what is visible", () => {
   });
 
   it("includes sold and reserved items rather than hiding them", async () => {
-    await makeProduct({ slug: "sold", status: ProductStatus.SOLD });
-    await makeProduct({ slug: "reserved", status: ProductStatus.RESERVED });
-    await makeProduct({ slug: "available", status: ProductStatus.AVAILABLE });
+    await makeProduct({ slug: "sold", availability: "SOLD" });
+    await makeProduct({ slug: "reserved", availability: "RESERVED" });
+    await makeProduct({ slug: "available", availability: "AVAILABLE" });
 
     const { items } = await listProducts();
 
@@ -89,9 +93,9 @@ describe("listProducts — what is visible", () => {
     // Availability is computed from stock and live holds, and AVAILABILITY_RANK
     // decides the order; a mistake there would float sold items to the top of
     // every page.
-    await makeProduct({ slug: "sold", status: ProductStatus.SOLD });
-    await makeProduct({ slug: "reserved", status: ProductStatus.RESERVED });
-    await makeProduct({ slug: "available", status: ProductStatus.AVAILABLE });
+    await makeProduct({ slug: "sold", availability: "SOLD" });
+    await makeProduct({ slug: "reserved", availability: "RESERVED" });
+    await makeProduct({ slug: "available", availability: "AVAILABLE" });
 
     const { items } = await listProducts();
 
@@ -99,7 +103,7 @@ describe("listProducts — what is visible", () => {
   });
 
   it("keeps sold items below available ones even when sorting by price", async () => {
-    await makeProduct({ slug: "cheap-sold", priceCents: 1_000, status: ProductStatus.SOLD });
+    await makeProduct({ slug: "cheap-sold", priceCents: 1_000, availability: "SOLD" });
     await makeProduct({ slug: "dear-available", priceCents: 900_000 });
 
     const { items } = await listProducts({ sort: "price-asc" });
@@ -117,7 +121,7 @@ describe("listProducts — filters", () => {
       description: "Heavyweight fleece, barely worn",
       priceCents: 250_000,
       size: "L",
-      category: Category.HOODIES,
+      category: "hoodies",
       condition: Condition.EXCELLENT,
       gender: Gender.UNISEX,
     });
@@ -128,7 +132,7 @@ describe("listProducts — filters", () => {
       description: "Lightweight cotton, no marks",
       priceCents: 80_000,
       size: "M",
-      category: Category.T_SHIRTS,
+      category: "t-shirts",
       condition: Condition.GOOD,
       gender: Gender.WOMENS,
     });
@@ -139,7 +143,7 @@ describe("listProducts — filters", () => {
       description: "Faded black, minor pilling at the cuffs",
       priceCents: 600_000,
       size: "XL",
-      category: Category.WIDE_LEG_SWEATPANTS,
+      category: "wide-leg-sweatpants",
       condition: Condition.FAIR,
       gender: Gender.MENS,
     });
@@ -358,7 +362,7 @@ describe("listSitemapEntries", () => {
   });
 
   it("includes sold items, which still answer the search that found them", async () => {
-    await makeProduct({ slug: "sold", status: ProductStatus.SOLD });
+    await makeProduct({ slug: "sold", availability: "SOLD" });
 
     expect((await listSitemapEntries()).map((entry) => entry.slug)).toContain("sold");
   });
@@ -374,8 +378,8 @@ describe("listSitemapEntries", () => {
 
 describe("categories as data", () => {
   it("filters by a category's slug, and offers its name", async () => {
-    await makeProduct({ slug: "a-hoodie", category: Category.HOODIES });
-    await makeProduct({ slug: "a-tee", category: Category.T_SHIRTS });
+    await makeProduct({ slug: "a-hoodie", category: "hoodies" });
+    await makeProduct({ slug: "a-tee", category: "t-shirts" });
 
     const { items } = await listProducts({ filters: { categories: ["hoodies"] } });
 
@@ -402,8 +406,6 @@ describe("categories as data", () => {
           slug: "twist-band-ring",
           title: "Twist Band Ring",
           priceCents: 250_000,
-          size: "7",
-          category: Category.HOODIES, // the old column, still required until the contract step
           categoryId: rings.id,
         },
       });

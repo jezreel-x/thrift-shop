@@ -172,7 +172,7 @@ export async function claimPayment(
   // as the buyer is concerned, and fifteen minutes is nowhere near long enough
   // for a person to read their messages.
   for (const item of order.items) {
-    const extended = item.variantId ? await holdForPaymentReview(item.variantId, userId) : false;
+    const extended = await holdForPaymentReview(item.variantId, userId);
     if (!extended) return { ok: false, reason: "hold-lapsed" };
   }
 

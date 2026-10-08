@@ -23,7 +23,7 @@ export async function resetDatabase(): Promise<void> {
     // StaffRole, ShopSettings and DeliveryArea are listed because nothing in
     // them references User, so the cascade from User would leave them behind
     // between tests.
-    `TRUNCATE TABLE "ProductStatusHistory", "ProductImage", "Product", "Session", "User", ` +
+    `TRUNCATE TABLE "ProductImage", "Product", "Session", "User", ` +
       `"StaffRole", "AuditLog", "ShopSettings", "DeliveryArea" RESTART IDENTITY CASCADE`,
   );
 }

@@ -168,10 +168,12 @@ Changes to existing models:
 - `OrderItem` points at a variant, gains `quantity`, and snapshots the option
   values alongside the title and price it already snapshots — so an old order
   still reads correctly after a product is renamed or repriced.
-- Dropped in the contract step, once nothing reads them: `Product.size`,
-  `status`, `reservedBy`, `reservedUntil`, the `Category` enum, and
-  `CartItem.productId`. `ProductStatusHistory` stops being written;
-  `StockMovement` takes over.
+- Dropped in the contract step, once nothing read them: `Product.size`,
+  `status`, `reservedBy`, `reservedUntil`, the `Category` and `ProductStatus`
+  enums, and `ProductStatusHistory` (the stock ledger, `StockMovement`, took
+  over). `CartItem.productId` was kept: merging a guest's cart into their
+  account still reads it, and dropping it would mean reworking code that works
+  for no gain.
 
 **The per-value prices are an admin shortcut, not a table.** Setting "every 36
 costs KSh 1,600" writes that price onto each 36 variant. Checkout, the cart and
@@ -250,6 +252,12 @@ with a year of them, because that is the habit worth having.
    code still reads is the failure expand/contract exists to prevent; by step 3
    nothing does.
 
+   _Done 8 October 2026_, in `20261008090000_contract_one_of_one`. Production
+   was checked first: every product had a category row and every cart and order
+   line a variant, so the `NOT NULL`s could not fail. The 41 rows of
+   `ProductStatusHistory`, all from pre-launch testing, were exported before the
+   table was dropped.
+
 ## Order of work
 
 | PR  | What                                                                                                                                                                                                                                             | Visible change                                        |
@@ -258,7 +266,7 @@ with a year of them, because that is the habit worth having.
 | 2   | **Categories as data.** The table, the backfill from the enum, option names and size lists per category, Condition and Fit optional                                                                                                              | **None**                                              |
 | 3   | **Storefront.** Swatches and per-swatch photos, option-2 buttons with sold-out values, prices that follow the choice, "From KSh", "Only N left", quantity steppers on the product page, cart and single-variant cards, filters from the category | Product page, catalogue, cart                         |
 | 4   | **Admin products.** Categories screen; product form with the variant grid and the three price levels; browser-resized uploads tagged by swatch; sold elsewhere, holds for WhatsApp buyers, share to WhatsApp; the stock ledger                   | Admin → Products                                      |
-| 5   | **Contract migration.**                                                                                                                                                                                                                          | None                                                  |
+| 5   | **Contract migration.** ✅                                                                                                                                                                                                                       | None                                                  |
 
 PRs 1 and 2 changing nothing visible is deliberate: they prove the new model
 carries today's shop exactly before anything is built on it.

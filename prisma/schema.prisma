@@ -1,10 +1,10 @@
 // Thrift Shop — data model.
 //
-// The governing constraint of this domain is that every item is one of one.
-// There is no quantity column anywhere, and there never should be: a product
-// row IS the garment. That is what makes `status` load-bearing rather than
-// decorative, and it is why two buyers reaching checkout at the same moment is
-// a correctness problem instead of an inventory one.
+// The governing constraint is that a unit is never sold twice. A product comes
+// in variants (colour × size), each with a stock count; a thrift item is the
+// special case of one variant with one unit. Checkout holds units against
+// stock without subtracting them, and every move of stock is in the ledger.
+// See docs/product-variants.md and docs/one-of-one-stock.md.
 
 generator client {
   provider = "prisma-client"
@@ -16,29 +16,6 @@ datasource db {
 }
 
 // ----------------------------- Enums -----------------------------
-
-// The shop's actual range, garment by garment.
-//
-// Deliberately not broad shelves like TOPS and BOTTOMS. "Hoodies" is something
-// people search for; "tops" is not, and flattening hoodies, sweatshirts,
-// flannels and T-shirts into one bucket would discard exactly the distinction
-// buyers browse by.
-//
-// A closed enum rather than a Category table: the range changes rarely, and
-// exhaustive checking in TypeScript means a category cannot be added without
-// every filter and label that renders it being updated too. The upgrade path,
-// if the owner ever needs to manage her own categories, is a table — but paying
-// for that flexibility now buys nothing.
-enum Category {
-  HOODIES
-  SWEATSHIRTS
-  T_SHIRTS
-  FLANNELS
-  SWEATPANTS
-  WIDE_LEG_SWEATPANTS
-  SIDE_POCKET_PANTS
-  UNDERWEAR
-}
 
 // Who a garment is cut for.
 //
@@ -59,15 +36,6 @@ enum Condition {
   EXCELLENT
   GOOD
   FAIR
-}
-
-// AVAILABLE -> RESERVED -> SOLD is the happy path. RESERVED is temporary and
-// always carries an expiry (see Product.reservedUntil); a reservation that
-// lapses returns to AVAILABLE. SOLD is terminal.
-enum ProductStatus {
-  AVAILABLE
-  RESERVED
-  SOLD
 }
 
 // ---------------------------- Models -----------------------------
@@ -94,28 +62,10 @@ model Product {
   // reasoning and the parsing rules.
   priceCents Int
 
-  // Free text rather than an enum. The current range is letter-sized throughout,
-  // but one column has to be able to hold "M", "W32" and "UK 8" the moment she
-  // stocks jeans or shoes — and a database enum would make each of those a
-  // migration. The permitted values per category are pinned in TypeScript
-  // instead, so writes stay clean without the schema having to know what a size
-  // is.
-  //
-  // Buyers filter by size before anything else, hence the composite index below.
-  //
-  // Superseded by ProductVariant.option2. Optional so new products need not
-  // invent a value; dropped in the contract migration.
-  size String?
-
-  // The old fixed list. Nothing reads it — the shop reads categoryId — and
-  // products created in the admin leave it empty. Dropped in the contract
-  // migration.
-  category Category?
-
-  // The category as data: its name, its options and its size list. Optional
-  // only until the contract migration, after the backfill has set every row.
-  categoryId  String?
-  categoryRef ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  // The category as data: its name, its options and its size list. Sizes,
+  // colours and stock live on the variants.
+  categoryId  String
+  categoryRef ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   // Meaningful for thrift and second-hand, not for new stock: shown only where
   // the category switches it on (ProductCategory.showCondition).
@@ -127,29 +77,13 @@ model Product {
   // clothing yes, perfume no.
   gender Gender?
 
-  status ProductStatus @default(AVAILABLE)
-
-  // When the current reservation lapses. Non-null only while status is RESERVED.
-  // A RESERVED row without an expiry is an item lost from the catalogue forever,
-  // so the two are written and cleared together.
-  reservedUntil DateTime?
-
-  // Who holds the current reservation — a session or user id, kept opaque so the
-  // reservation layer does not need to know what authentication looks like.
-  //
-  // Without it a hold is anonymous, and any second visitor could complete
-  // checkout on someone else's reservation: the whole point is that this item is
-  // promised to one person for fifteen minutes.
-  reservedBy String?
-
-  images        ProductImage[]
-  statusHistory ProductStatusHistory[]
+  images     ProductImage[]
   // What is actually bought. One per product for a thrift item; one per
   // colour-and-size combination for stock. See docs/product-variants.md.
-  variants      ProductVariant[]
-  swatches      ProductSwatch[]
-  cartItems     CartItem[]
-  orderItems    OrderItem[]
+  variants   ProductVariant[]
+  swatches   ProductSwatch[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -159,18 +93,9 @@ model Product {
   // filters on `deletedAt: null`.
   deletedAt DateTime?
 
-  // The catalogue's own query is "available items, filtered, newest first", so
-  // status leads every composite index. Size comes second because it is the
-  // filter buyers reach for first.
-  @@index([status, size])
-  @@index([status, category])
-  @@index([status, gender])
-  @@index([status, priceCents])
-  @@index([status, createdAt])
-  @@index([deletedAt])
-  // The sweep asks for reservations that have lapsed. Without this it scans the
-  // whole catalogue every time it runs, which is every minute or so forever.
-  @@index([status, reservedUntil])
+  // The catalogue lists what isn't withdrawn, newest first; what can be bought
+  // is worked out from the variants' stock and holds, not stored here.
+  @@index([deletedAt, createdAt])
   @@index([categoryId])
 }
 
@@ -216,29 +141,6 @@ model ProductImage {
 
   @@index([productId, position])
   @@index([checksum])
-}
-
-// An append-only record of every status transition.
-//
-// `status` on Product is overwritten in place, so without this the answer to
-// "when did this sell, and what moved it?" is unrecoverable. That question gets
-// asked during payment disputes, which is exactly when reconstructing it from
-// memory is least convincing.
-model ProductStatusHistory {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  // Null on the first row, which records the item entering the catalogue.
-  fromStatus ProductStatus?
-  toStatus   ProductStatus
-
-  // Free text: "payment confirmed", "reservation expired", "returned by buyer".
-  reason String?
-
-  createdAt DateTime @default(now())
-
-  @@index([productId, createdAt])
 }
 
 // ----------------------------- Accounts -----------------------------
@@ -367,9 +269,9 @@ model CartItem {
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  // What the shopper picked. Optional only until the contract migration.
-  variantId String?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  // What the shopper picked.
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   // 1 to 5. The cart reserves nothing, so this is a wish, checked against what
   // is free every time the cart is shown and again at checkout.
@@ -480,10 +382,9 @@ model OrderItem {
   size       String
   priceCents Int
 
-  // What exactly was bought. Optional only until the contract migration,
-  // after the backfill has pointed every existing row at its variant.
-  variantId String?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  // What exactly was bought.
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   // Snapshot of the option-1 value ("Khaki"), alongside title, size and price.
   swatch String?

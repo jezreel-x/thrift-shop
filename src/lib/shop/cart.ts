@@ -217,7 +217,7 @@ export async function clearCart(cartId: string): Promise<void> {
  */
 export async function getCartContents(cartId: string, holderId?: string): Promise<CartContents> {
   const items = await prisma.cartItem.findMany({
-    where: { cartId, variantId: { not: null } },
+    where: { cartId },
     orderBy: { createdAt: "asc" },
     select: {
       quantity: true,
@@ -247,13 +247,11 @@ export async function getCartContents(cartId: string, holderId?: string): Promis
   });
 
   const availability = await getAvailability(
-    items.flatMap((item) => (item.variant ? [item.variant.id] : [])),
+    items.map((item) => item.variant.id),
     holderId,
   );
 
   const lines: CartLine[] = items.flatMap(({ quantity, variant }) => {
-    if (!variant) return [];
-
     const { product } = variant;
     const counts = availability.get(variant.id) ?? { stock: 0, heldByOthers: 0 };
     const reason = unavailableReason(product.deletedAt, counts);

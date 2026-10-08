@@ -76,7 +76,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         label: "Staff & roles",
         icon: "staff",
         permission: Permission.STAFF_MANAGE,
-        ready: false,
+        ready: true,
       },
     ],
   },

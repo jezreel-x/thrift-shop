@@ -17,6 +17,10 @@ import type { Prisma } from "@/generated/prisma/client";
  */
 export type AuditAction =
   | "staff.grant-role"
+  | "staff.revoke-role"
+  | "staff.create-role"
+  | "staff.update-role"
+  | "staff.delete-role"
   | "order.confirm-payment"
   | "order.reject-payment"
   | "settings.update-payment"

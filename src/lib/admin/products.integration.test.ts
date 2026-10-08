@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { Category } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { reserveVariant } from "@/lib/shop/reservations";
 import { categoryIdFor, stockOf } from "@/test/catalogue";
@@ -26,7 +25,7 @@ async function cargoPants(cells: Partial<DraftCell>[]): Promise<ProductDraft> {
     description: null,
     brand: null,
     priceCents: 140_000,
-    categoryId: await categoryIdFor(Category.SIDE_POCKET_PANTS),
+    categoryId: await categoryIdFor("side-pocket-pants"),
     condition: null,
     gender: "UNISEX",
     swatches: [
@@ -90,8 +89,6 @@ describe("saveProduct", () => {
     const product = await db.product.findFirstOrThrow({
       include: { variants: { include: { swatch: true } }, swatches: true },
     });
-    expect(product.size).toBeNull();
-    expect(product.category).toBeNull();
     expect(product.swatches.map((swatch) => swatch.name).sort()).toEqual(["Black", "Khaki"]);
     expect(
       product.variants
@@ -235,7 +232,7 @@ describe("saveProduct", () => {
         items: {
           create: {
             productId: id,
-            variantId: large.id,
+            variantId: large.id!,
             title: "Cargo Pants",
             size: "L",
             priceCents: 140_000,

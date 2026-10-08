@@ -1,4 +1,4 @@
-import { Category, Condition, Gender } from "@/generated/prisma/enums";
+import { Condition, Gender } from "@/generated/prisma/enums";
 import { normaliseCategorySlug } from "@/lib/shop/categories";
 import { db } from "./db";
 
@@ -19,20 +19,16 @@ export async function makeProduct(
 ) {
   sequence += 1;
   const option2 = variant.option2 === undefined ? "M" : variant.option2;
-  const category = (overrides.category as Category | undefined) ?? Category.HOODIES;
+  const { category = "hoodies", ...fields } = overrides as { category?: string };
 
   const product = await db.product.create({
     data: {
       slug: `product-${sequence}`,
       title: `Product ${sequence}`,
       priceCents: 150_000,
-      // Still required until the contract migration; nothing reads it.
-      size: option2 ?? "M",
-      category: Category.HOODIES,
       condition: Condition.GOOD,
       gender: Gender.UNISEX,
-      ...overrides,
-      // Linked to its row, as the migration links real products.
+      ...fields,
       categoryId: await categoryIdFor(category),
     },
   });
@@ -54,8 +50,11 @@ export async function stockOf(variantId: string): Promise<number> {
   return (await db.productVariant.findUniqueOrThrow({ where: { id: variantId } })).stock;
 }
 
-/** The category row the migration created for an old enum value. */
-export async function categoryIdFor(category: Category): Promise<string> {
+/**
+ * A category's id from its slug ("t-shirts"), or the old way of naming it
+ * ("T_SHIRTS"), which reads as the same slug.
+ */
+export async function categoryIdFor(category: string): Promise<string> {
   const row = await db.productCategory.findUniqueOrThrow({
     where: { slug: normaliseCategorySlug(category) },
   });

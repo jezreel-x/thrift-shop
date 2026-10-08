@@ -2,7 +2,7 @@ import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Category, Condition, Gender, ProductStatus } from "../src/generated/prisma/enums";
+import type { Condition, Gender } from "../src/generated/prisma/enums";
 import { normaliseCategorySlug, offersOption2 } from "../src/lib/shop/categories";
 import { prisma } from "../src/lib/prisma";
 
@@ -16,14 +16,14 @@ import { prisma } from "../src/lib/prisma";
  * sizes by hand: products are matched on slug and updated in place, and their
  * images are replaced to match the manifest.
  *
- * A handful of items are marked SOLD and RESERVED rather than leaving everything
- * available, because "every item is one of one" is the shop's whole premise and
- * a catalogue where nothing has ever sold fails to show it.
+ * A handful of items are sold out or held rather than leaving everything
+ * available: a catalogue where nothing has ever sold doesn't show what the
+ * shop is like.
  */
 
 const MANIFEST_PATH = join("prisma", "seed-manifest.json");
 
-/** Every nth item is marked sold, and every nth+1 reserved. */
+/** Every nth item is sold out, and every mth held in a checkout. */
 const SOLD_EVERY = 7;
 const RESERVED_EVERY = 11;
 
@@ -36,9 +36,13 @@ type ManifestImage = {
   alt: string;
 };
 
+/** How a seeded item starts out. */
+type SeedState = "available" | "sold" | "held";
+
 type ManifestItem = {
   slug: string;
-  category: Category;
+  /** The category the old way (HOODIES), read as its slug (hoodies). */
+  category: string;
   title: string;
   description: string | null;
   brand: string | null;
@@ -65,7 +69,7 @@ async function main() {
   let updated = 0;
 
   for (const [index, item] of items.entries()) {
-    const status = statusFor(index);
+    const state = stateFor(index);
 
     const existing = await prisma.product.findUnique({ where: { slug: item.slug } });
 
@@ -75,13 +79,10 @@ async function main() {
       description: item.description,
       brand: item.brand,
       priceCents: item.priceCents,
-      category: item.category,
-      categoryId: categoryOf(item)?.id,
+      // validate() has made sure every item has one.
+      categoryId: categoryOf(item)!.id,
       condition: item.condition,
       gender: item.gender,
-      // Still required until the contract migration drops it; the variant below
-      // is what the shop reads.
-      size: item.size,
     };
 
     const product = await prisma.product.upsert({
@@ -91,7 +92,7 @@ async function main() {
     });
 
     // One variant per thrift item: its size, one unit unless it has sold.
-    const stock = status === ProductStatus.SOLD ? 0 : 1;
+    const stock = state === "sold" ? 0 : 1;
     const variant =
       (await prisma.productVariant.findFirst({ where: { productId: product.id } })) ??
       (await prisma.productVariant.create({
@@ -102,8 +103,8 @@ async function main() {
       data: { option2: item.size, stock },
     });
     await prisma.stockHold.deleteMany({ where: { variantId: variant.id } });
-    if (status === ProductStatus.RESERVED) {
-      // A short, real hold, so the RESERVED badge shows for a while after
+    if (state === "held") {
+      // A short, real hold, so the Reserved badge shows for a while after
       // seeding and then lapses exactly as a buyer's would.
       await prisma.stockHold.create({
         data: {
@@ -202,13 +203,13 @@ function validate(
   }
 }
 
-function statusFor(index: number): ProductStatus {
+function stateFor(index: number): SeedState {
   const position = index + 1;
 
-  if (position % SOLD_EVERY === 0) return ProductStatus.SOLD;
-  if (position % RESERVED_EVERY === 0) return ProductStatus.RESERVED;
+  if (position % SOLD_EVERY === 0) return "sold";
+  if (position % RESERVED_EVERY === 0) return "held";
 
-  return ProductStatus.AVAILABLE;
+  return "available";
 }
 
 try {

@@ -253,7 +253,7 @@ describe("claimPayment", () => {
       include: { items: true },
     });
     await db.stockHold.updateMany({
-      where: { variantId: order.items[0].variantId ?? "" },
+      where: { variantId: order.items[0].variantId },
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
 

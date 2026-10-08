@@ -67,15 +67,13 @@ export async function confirmOrder(input: {
 
       const lapsed: string[] = [];
       for (const item of claimed.order.items) {
-        const sold = item.variantId
-          ? await confirmSaleIn(tx, {
-              variantId: item.variantId,
-              holder: claimed.order.userId,
-              quantity: item.quantity,
-              orderId: input.orderId,
-              now,
-            })
-          : false;
+        const sold = await confirmSaleIn(tx, {
+          variantId: item.variantId,
+          holder: claimed.order.userId,
+          quantity: item.quantity,
+          orderId: input.orderId,
+          now,
+        });
         if (!sold) lapsed.push(item.title);
       }
       if (lapsed.length > 0) throw new HoldLapsed(lapsed);
@@ -127,7 +125,7 @@ export async function rejectOrder(input: {
 
     let released = 0;
     for (const item of claimed.order.items) {
-      if (item.variantId && (await releaseHoldIn(tx, item.variantId, claimed.order.userId))) {
+      if (await releaseHoldIn(tx, item.variantId, claimed.order.userId)) {
         released += 1;
       }
     }
@@ -279,13 +277,13 @@ export async function getOrderForReview(reference: string) {
   const holds = await prisma.stockHold.findMany({
     where: {
       holder: order.userId,
-      variantId: { in: order.items.flatMap((item) => (item.variantId ? [item.variantId] : [])) },
+      variantId: { in: order.items.map((item) => item.variantId) },
     },
     select: { variantId: true, quantity: true, expiresAt: true },
   });
   const holdFor = new Map(holds.map((hold) => [hold.variantId, hold]));
   const items = order.items.map((item) => {
-    const hold = item.variantId ? holdFor.get(item.variantId) : undefined;
+    const hold = holdFor.get(item.variantId);
 
     return {
       ...item,

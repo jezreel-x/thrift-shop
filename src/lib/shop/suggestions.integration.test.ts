@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { Category } from "@/generated/prisma/enums";
 import { makeProduct } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { reserveVariant } from "./reservations";
@@ -27,15 +26,15 @@ describe("listSuggestions", () => {
   it("puts the same kind in the shopper's size first, then the same kind, then the rest", async () => {
     const inCart = await makeProduct({
       slug: "in-cart",
-      category: Category.HOODIES,
+      category: "hoodies",
       createdAt: at(),
     });
-    await makeProduct({ slug: "tee-m", category: Category.T_SHIRTS, createdAt: at() });
+    await makeProduct({ slug: "tee-m", category: "t-shirts", createdAt: at() });
     await makeProduct(
-      { slug: "hoodie-xl", category: Category.HOODIES, createdAt: at() },
+      { slug: "hoodie-xl", category: "hoodies", createdAt: at() },
       { option2: "XL" },
     );
-    await makeProduct({ slug: "hoodie-m", category: Category.HOODIES, createdAt: at() });
+    await makeProduct({ slug: "hoodie-m", category: "hoodies", createdAt: at() });
 
     const suggestions = await listSuggestions({ productIds: [inCart.id], sizes: ["M"] });
 

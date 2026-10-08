@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
 
-import { Category, Condition, Gender } from "../src/generated/prisma/enums";
+import { Condition, Gender } from "../src/generated/prisma/enums";
 import { slugify } from "../src/lib/slug";
 
 /**
@@ -37,16 +37,20 @@ const MANIFEST_PATH = join("prisma", "seed-manifest.json");
  */
 const MAX_EDGE = 2000;
 
-/** Folder name to Category. The folders are named the way a person would name them. */
-const CATEGORY_BY_FOLDER: Record<string, Category> = {
-  hoodies: Category.HOODIES,
-  sweatshirts: Category.SWEATSHIRTS,
-  "t-shirts": Category.T_SHIRTS,
-  flannels: Category.FLANNELS,
-  sweatpants: Category.SWEATPANTS,
-  "wide-leg-sweatpants": Category.WIDE_LEG_SWEATPANTS,
-  "side-pocket-pants": Category.SIDE_POCKET_PANTS,
-  underwear: Category.UNDERWEAR,
+/**
+ * Folder name to the category as the manifest names it. The folders are named
+ * the way a person would name them; the manifest keeps the names it has always
+ * used (HOODIES), which the seed reads as the category's slug (hoodies).
+ */
+const CATEGORY_BY_FOLDER: Record<string, string> = {
+  hoodies: "HOODIES",
+  sweatshirts: "SWEATSHIRTS",
+  "t-shirts": "T_SHIRTS",
+  flannels: "FLANNELS",
+  sweatpants: "SWEATPANTS",
+  "wide-leg-sweatpants": "WIDE_LEG_SWEATPANTS",
+  "side-pocket-pants": "SIDE_POCKET_PANTS",
+  underwear: "UNDERWEAR",
 };
 
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|heic|heif)$/i;
@@ -62,7 +66,7 @@ type ManifestImage = {
 
 type ManifestItem = {
   slug: string;
-  category: Category;
+  category: string;
   title: string;
   description: string | null;
   brand: string | null;

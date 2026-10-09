@@ -265,6 +265,11 @@ type ExistingVariant = {
   label: string;
 };
 
+/** A product's details: everything on the Details tab. */
+export type ProductDetails = Omit<ProductDraft, "swatches" | "cells">;
+/** A product's colours and stock grid: everything on the Stock tab. */
+export type ProductGrid = Pick<ProductDraft, "swatches" | "cells">;
+
 /**
  * Creates a product (`productId` null) or saves one, with its whole grid.
  */
@@ -274,174 +279,83 @@ export async function saveProduct(input: {
   actorId: string;
   now?: Date;
 }): Promise<SaveResult> {
-  const { draft, actorId } = input;
+  return persist({ ...input, details: input.draft, grid: input.draft });
+}
+
+/** Saves the Details tab: the grid is left exactly as it is. */
+export async function saveProductDetails(input: {
+  productId: string;
+  details: ProductDetails;
+  actorId: string;
+}): Promise<SaveResult> {
+  return persist({ ...input, details: input.details, grid: null });
+}
+
+/** Saves the Stock tab: name, price and the rest are left as they are. */
+export async function saveProductStock(input: {
+  productId: string;
+  grid: ProductGrid;
+  actorId: string;
+  now?: Date;
+}): Promise<SaveResult> {
+  return persist({ ...input, details: null, grid: input.grid });
+}
+
+/**
+ * One save, in one transaction: the details, the grid, or both. Creating
+ * needs both: a product with no stock row can't be sold.
+ */
+async function persist(input: {
+  productId: string | null;
+  details: ProductDetails | null;
+  grid: ProductGrid | null;
+  actorId: string;
+  now?: Date;
+}): Promise<SaveResult> {
+  const { details, grid, actorId } = input;
   const now = input.now ?? new Date();
 
   try {
     return await prisma.$transaction(async (tx) => {
+      if (input.productId === null && (!details || !grid)) {
+        throw new Error("Creating a product needs its details and its grid.");
+      }
       const product = input.productId
         ? await lockProduct(tx, input.productId)
-        : await createProduct(tx, draft);
+        : await createProduct(tx, details!);
       const creating = input.productId === null;
-
-      const existing = creating ? [] : await lockVariants(tx, product.id, now);
-      const swatchesBefore = creating
-        ? []
-        : await tx.productSwatch.findMany({ where: { productId: product.id } });
       const before = creating ? null : await snapshot(tx, product.id);
 
-      if (!creating) {
+      if (!creating && details) {
+        // Moving to another category must not strand the grid: colours where
+        // the new category has none, or sizes where it has no sizes.
+        if (!grid) await checkCategoryFits(tx, product.id, details.categoryId);
         await tx.product.update({
           where: { id: product.id },
           data: {
-            title: draft.title,
-            description: draft.description,
-            brand: draft.brand,
-            priceCents: draft.priceCents,
-            categoryId: draft.categoryId,
-            condition: draft.condition,
-            gender: draft.gender,
+            title: details.title,
+            description: details.description,
+            brand: details.brand,
+            priceCents: details.priceCents,
+            categoryId: details.categoryId,
+            condition: details.condition,
+            gender: details.gender,
             // The slug stays: links to it are already in WhatsApp chats.
           },
         });
       }
 
-      // ---- First, check the grid still describes this product. Nothing in it is written yet.
-      const knownSwatches = new Map(swatchesBefore.map((swatch) => [swatch.id, swatch]));
-      if (draft.swatches.some((swatch) => swatch.id && !knownSwatches.has(swatch.id))) {
-        throw new SaveRefused({ grid: "A colour on this form no longer exists. Reload." });
-      }
-      // Existing swatches are known by id now; new ones get theirs when created.
-      const existingSwatchId = new Map(
-        draft.swatches.flatMap((swatch) => (swatch.id ? [[swatch.key, swatch.id] as const] : [])),
-      );
-      const swatchIdOf = (key: string | null) =>
-        key === null ? null : (existingSwatchId.get(key) ?? undefined);
-
-      const byId = new Map(existing.map((variant) => [variant.id, variant]));
-      const byPlace = new Set(
-        existing.map((variant) => placeKey(variant.swatchId, variant.option2)),
-      );
-      const errors: FormErrors = {};
-      const kept = new Set<string>();
-
-      for (const cell of draft.cells) {
-        const swatchId = swatchIdOf(cell.swatchKey);
-        const field = cellKey(cell.swatchKey, cell.option2);
-
-        if (cell.id === null) {
-          // A new colour's cells cannot already exist.
-          if (swatchId !== undefined && byPlace.has(placeKey(swatchId, cell.option2))) {
-            errors[field] = "Someone else added this size while you were editing. Reload.";
-          }
-          continue;
-        }
-
-        const variant = byId.get(cell.id);
-        if (!variant || variant.swatchId !== swatchId || variant.option2 !== cell.option2) {
-          errors[field] = "This size changed while you were editing. Reload.";
-          continue;
-        }
-        kept.add(variant.id);
-      }
-
-      const removed = existing.filter((variant) => !kept.has(variant.id));
-      const inCheckout = removed.filter((variant) => variant.held > 0);
-      if (inCheckout.length > 0) {
-        errors.grid =
-          `${list(inCheckout.map((variant) => variant.label))} ${inCheckout.length === 1 ? "is" : "are"} ` +
-          "in a buyer's checkout, so it can't be removed yet. Put the stock back, or wait until they finish.";
-      }
-      if (Object.keys(errors).length > 0) throw new SaveRefused(errors);
-
-      // ---- What the owner cleared goes first, freeing its names for reuse:
-      // removed, or kept at 0 where orders name it.
-      let keptOnOrders = 0;
-      for (const variant of removed) {
-        if (variant.onOrders) {
-          keptOnOrders += 1;
-          if (variant.stock > 0) {
-            await tx.productVariant.update({ where: { id: variant.id }, data: { stock: 0 } });
-            await tx.stockMovement.create({
-              data: {
-                variantId: variant.id,
-                change: -variant.stock,
-                reason: "removed from the grid",
-                actorId,
-              },
-            });
-          }
-        } else {
-          await tx.productVariant.delete({ where: { id: variant.id } });
-        }
-      }
-
-      const stillUsed = new Set(
-        (
-          await tx.productVariant.findMany({
-            where: { productId: product.id },
-            select: { swatchId: true },
+      const keptOnOrders = grid
+        ? await saveGrid(tx, {
+            productId: product.id,
+            existing: creating ? [] : await lockVariants(tx, product.id, now),
+            swatchesBefore: creating
+              ? []
+              : await tx.productSwatch.findMany({ where: { productId: product.id } }),
+            grid,
+            actorId,
           })
-        ).map((variant) => variant.swatchId),
-      );
-      const wanted = new Set(existingSwatchId.values());
-      const leaving = swatchesBefore.filter((swatch) => !wanted.has(swatch.id));
-      const staying = leaving.filter((swatch) => stillUsed.has(swatch.id));
-      await tx.productSwatch.deleteMany({
-        where: {
-          id: { in: leaving.filter((swatch) => !stillUsed.has(swatch.id)).map((s) => s.id) },
-        },
-      });
-
-      // A colour kept for past orders keeps its name, so nothing else can take it.
-      const draftNames = new Set(draft.swatches.map((swatch) => swatch.name.toLowerCase()));
-      const clash = staying.find((swatch) => draftNames.has(swatch.name.toLowerCase()));
-      if (clash) {
-        throw new SaveRefused({
-          grid: `${clash.name} is on past orders, so it stays on this product. Give the new one a different name.`,
-        });
-      }
-
-      // ---- Swatches: renamed ones are parked under temporary names first, so
-      // swapping two names does not trip the unique (product, name) index.
-      const renamed = draft.swatches.filter(
-        (swatch) => swatch.id && knownSwatches.get(swatch.id)?.name !== swatch.name,
-      );
-      for (const swatch of renamed) {
-        await tx.productSwatch.update({
-          where: { id: swatch.id! },
-          data: { name: `~renaming ${swatch.id}` },
-        });
-      }
-      const swatchIds = new Map<string, string>();
-      for (const swatch of draft.swatches) {
-        const data = { name: swatch.name, hex: swatch.hex, position: swatch.position };
-        const saved = swatch.id
-          ? await tx.productSwatch.update({ where: { id: swatch.id }, data })
-          : await tx.productSwatch.create({ data: { ...data, productId: product.id } });
-        swatchIds.set(swatch.key, saved.id);
-      }
-
-      // ---- Cells.
-      const stockNow: Record<string, number> = {};
-      for (const cell of draft.cells) {
-        if (cell.id === null) {
-          const swatchId = cell.swatchKey === null ? null : swatchIds.get(cell.swatchKey)!;
-          await createVariant(tx, { productId: product.id, swatchId, cell, actorId });
-          continue;
-        }
-
-        const variant = byId.get(cell.id)!;
-        const problem = await updateVariant(tx, { variant, cell, actorId });
-        if (problem) {
-          errors[cellKey(cell.swatchKey, cell.option2)] = problem.message;
-          // The form needs the new count, or saving again would clash again.
-          if (problem.changed) stockNow[variant.id] = variant.stock;
-        }
-      }
-      if (Object.keys(errors).length > 0) {
-        throw new SaveRefused(errors, Object.keys(stockNow).length > 0 ? stockNow : undefined);
-      }
+        : 0;
 
       await recordAudit(tx, {
         actorId,
@@ -459,6 +373,191 @@ export async function saveProduct(input: {
       return { ok: false, errors: error.errors, stockNow: error.stockNow };
     }
     throw error;
+  }
+}
+
+/**
+ * Writes the grid: removals, colours, then cells. Throws SaveRefused, which
+ * rolls the whole save back, when the grid no longer describes the product.
+ * Returns how many cleared cells were kept at 0 because orders name them.
+ */
+async function saveGrid(
+  tx: Prisma.TransactionClient,
+  input: {
+    productId: string;
+    existing: ExistingVariant[];
+    swatchesBefore: { id: string; name: string }[];
+    grid: ProductGrid;
+    actorId: string;
+  },
+): Promise<number> {
+  const { existing, swatchesBefore, grid, actorId } = input;
+  const product = { id: input.productId };
+
+  // ---- First, check the grid still describes this product. Nothing in it is written yet.
+  const knownSwatches = new Map(swatchesBefore.map((swatch) => [swatch.id, swatch]));
+  if (grid.swatches.some((swatch) => swatch.id && !knownSwatches.has(swatch.id))) {
+    throw new SaveRefused({ grid: "A colour on this form no longer exists. Reload." });
+  }
+  // Existing swatches are known by id now; new ones get theirs when created.
+  const existingSwatchId = new Map(
+    grid.swatches.flatMap((swatch) => (swatch.id ? [[swatch.key, swatch.id] as const] : [])),
+  );
+  const swatchIdOf = (key: string | null) =>
+    key === null ? null : (existingSwatchId.get(key) ?? undefined);
+
+  const byId = new Map(existing.map((variant) => [variant.id, variant]));
+  const byPlace = new Set(existing.map((variant) => placeKey(variant.swatchId, variant.option2)));
+  const errors: FormErrors = {};
+  const kept = new Set<string>();
+
+  for (const cell of grid.cells) {
+    const swatchId = swatchIdOf(cell.swatchKey);
+    const field = cellKey(cell.swatchKey, cell.option2);
+
+    if (cell.id === null) {
+      // A new colour's cells cannot already exist.
+      if (swatchId !== undefined && byPlace.has(placeKey(swatchId, cell.option2))) {
+        errors[field] = "Someone else added this size while you were editing. Reload.";
+      }
+      continue;
+    }
+
+    const variant = byId.get(cell.id);
+    if (!variant || variant.swatchId !== swatchId || variant.option2 !== cell.option2) {
+      errors[field] = "This size changed while you were editing. Reload.";
+      continue;
+    }
+    kept.add(variant.id);
+  }
+
+  const removed = existing.filter((variant) => !kept.has(variant.id));
+  const inCheckout = removed.filter((variant) => variant.held > 0);
+  if (inCheckout.length > 0) {
+    errors.grid =
+      `${list(inCheckout.map((variant) => variant.label))} ${inCheckout.length === 1 ? "is" : "are"} ` +
+      "in a buyer's checkout, so it can't be removed yet. Put the stock back, or wait until they finish.";
+  }
+  if (Object.keys(errors).length > 0) throw new SaveRefused(errors);
+
+  // ---- What the owner cleared goes first, freeing its names for reuse:
+  // removed, or kept at 0 where orders name it.
+  let keptOnOrders = 0;
+  for (const variant of removed) {
+    if (variant.onOrders) {
+      keptOnOrders += 1;
+      if (variant.stock > 0) {
+        await tx.productVariant.update({ where: { id: variant.id }, data: { stock: 0 } });
+        await tx.stockMovement.create({
+          data: {
+            variantId: variant.id,
+            change: -variant.stock,
+            reason: "removed from the grid",
+            actorId,
+          },
+        });
+      }
+    } else {
+      await tx.productVariant.delete({ where: { id: variant.id } });
+    }
+  }
+
+  const stillUsed = new Set(
+    (
+      await tx.productVariant.findMany({
+        where: { productId: product.id },
+        select: { swatchId: true },
+      })
+    ).map((variant) => variant.swatchId),
+  );
+  const wanted = new Set(existingSwatchId.values());
+  const leaving = swatchesBefore.filter((swatch) => !wanted.has(swatch.id));
+  const staying = leaving.filter((swatch) => stillUsed.has(swatch.id));
+  await tx.productSwatch.deleteMany({
+    where: {
+      id: { in: leaving.filter((swatch) => !stillUsed.has(swatch.id)).map((s) => s.id) },
+    },
+  });
+
+  // A colour kept for past orders keeps its name, so nothing else can take it.
+  const draftNames = new Set(grid.swatches.map((swatch) => swatch.name.toLowerCase()));
+  const clash = staying.find((swatch) => draftNames.has(swatch.name.toLowerCase()));
+  if (clash) {
+    throw new SaveRefused({
+      grid: `${clash.name} is on past orders, so it stays on this product. Give the new one a different name.`,
+    });
+  }
+
+  // ---- Swatches: renamed ones are parked under temporary names first, so
+  // swapping two names does not trip the unique (product, name) index.
+  const renamed = grid.swatches.filter(
+    (swatch) => swatch.id && knownSwatches.get(swatch.id)?.name !== swatch.name,
+  );
+  for (const swatch of renamed) {
+    await tx.productSwatch.update({
+      where: { id: swatch.id! },
+      data: { name: `~renaming ${swatch.id}` },
+    });
+  }
+  const swatchIds = new Map<string, string>();
+  for (const swatch of grid.swatches) {
+    const data = { name: swatch.name, hex: swatch.hex, position: swatch.position };
+    const saved = swatch.id
+      ? await tx.productSwatch.update({ where: { id: swatch.id }, data })
+      : await tx.productSwatch.create({ data: { ...data, productId: product.id } });
+    swatchIds.set(swatch.key, saved.id);
+  }
+
+  // ---- Cells.
+  const stockNow: Record<string, number> = {};
+  for (const cell of grid.cells) {
+    if (cell.id === null) {
+      const swatchId = cell.swatchKey === null ? null : swatchIds.get(cell.swatchKey)!;
+      await createVariant(tx, { productId: product.id, swatchId, cell, actorId });
+      continue;
+    }
+
+    const variant = byId.get(cell.id)!;
+    const problem = await updateVariant(tx, { variant, cell, actorId });
+    if (problem) {
+      errors[cellKey(cell.swatchKey, cell.option2)] = problem.message;
+      // The form needs the new count, or saving again would clash again.
+      if (problem.changed) stockNow[variant.id] = variant.stock;
+    }
+  }
+  if (Object.keys(errors).length > 0) {
+    throw new SaveRefused(errors, Object.keys(stockNow).length > 0 ? stockNow : undefined);
+  }
+
+  return keptOnOrders;
+}
+
+/** Refuses a category the product's colours or sizes wouldn't fit. */
+async function checkCategoryFits(
+  tx: Prisma.TransactionClient,
+  productId: string,
+  categoryId: string,
+): Promise<void> {
+  const [category, variants] = await Promise.all([
+    tx.productCategory.findUnique({ where: { id: categoryId } }),
+    tx.productVariant.findMany({ where: { productId }, select: { swatchId: true, option2: true } }),
+  ]);
+  if (!category) throw new SaveRefused({ categoryId: "That category no longer exists." });
+
+  if (!category.option1Name && variants.some((variant) => variant.swatchId !== null)) {
+    throw new SaveRefused({
+      categoryId: `${category.name} has no colours, and this product does. Remove its colours on the Stock tab first.`,
+    });
+  }
+  if (!category.option2Name && variants.some((variant) => variant.option2 !== null)) {
+    throw new SaveRefused({
+      categoryId: `${category.name} has no sizes, and this product does. Clear its sizes on the Stock tab first.`,
+    });
+  }
+  if (category.option2Name && variants.some((variant) => variant.option2 === null)) {
+    throw new SaveRefused({
+      categoryId: `${category.name} comes in sizes. Move the product, then set its sizes on the Stock tab.`,
+    });
   }
 }
 
@@ -585,7 +684,7 @@ async function lockVariants(
 
 async function createProduct(
   tx: Prisma.TransactionClient,
-  draft: ProductDraft,
+  draft: ProductDetails,
 ): Promise<{ id: string; slug: string }> {
   // "black leather jacket" will recur; a short random tail keeps each its own page.
   const bare = productSlug(draft.title);

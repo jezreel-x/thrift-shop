@@ -36,7 +36,27 @@ describe("adminNavFor", () => {
     const owner = resolveAccess("u1", [{ name: "Owner", isSuperAdmin: true, permissions: [] }]);
 
     for (const item of adminNavFor(owner!).flatMap((section) => section.items)) {
-      expect(Object.keys(item).sort()).toEqual(["href", "icon", "label", "ready"]);
+      const { children, ...rest } = item;
+      expect(Object.keys(rest).sort()).toEqual(["href", "icon", "label", "ready"]);
+      for (const child of children ?? [])
+        expect(Object.keys(child).sort()).toEqual(["href", "label"]);
+    }
+  });
+
+  it("splits Settings into its four pages, each under /admin/settings", () => {
+    const owner = resolveAccess("u1", [{ name: "Owner", isSuperAdmin: true, permissions: [] }]);
+    const settings = adminNavFor(owner!)
+      .flatMap((section) => section.items)
+      .find((item) => item.label === "Settings");
+
+    expect(settings?.children?.map((child) => child.label)).toEqual([
+      "Payment details",
+      "WhatsApp",
+      "Pickup & delivery",
+      "Recent changes",
+    ]);
+    for (const child of settings?.children ?? []) {
+      expect(isActive(settings!.href, child.href)).toBe(true);
     }
   });
 });

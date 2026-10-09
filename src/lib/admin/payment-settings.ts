@@ -1,7 +1,7 @@
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { formatPhone, normalisePhone } from "../phone";
 import { prisma } from "../prisma";
-import { recordAudit } from "./audit";
+import { type AuditAction, recordAudit } from "./audit";
 import { describeDeliveryChanges } from "./delivery-settings";
 
 /**
@@ -264,30 +264,45 @@ export async function getWhatsAppFormValue(): Promise<string> {
   return row?.whatsappNumber ? formatPhone(row.whatsappNumber) : "";
 }
 
-export type PaymentSettingsChange = {
+/** The kinds of settings change, as the Recent changes tabs filter them. */
+export const SETTINGS_CHANGE_TYPES = [
+  { slug: "payment", label: "Payment details" },
+  { slug: "whatsapp", label: "WhatsApp" },
+  { slug: "delivery", label: "Pickup & delivery" },
+] as const;
+
+export type SettingsChangeType = (typeof SETTINGS_CHANGE_TYPES)[number]["slug"];
+
+const ACTIONS: Record<SettingsChangeType, AuditAction[]> = {
+  payment: ["settings.update-payment", "settings.clear-payment"],
+  whatsapp: ["settings.update-whatsapp"],
+  delivery: ["settings.update-delivery"],
+};
+
+export type SettingsChange = {
   id: string;
+  type: SettingsChangeType;
   createdAt: Date;
   actor: string;
   /** Human-readable differences: "Till number: 123456 → 654321". */
   changes: string[];
 };
 
-/** The latest changes to payment, WhatsApp and delivery settings, newest first. */
-export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSettingsChange[]> {
+/**
+ * The latest changes to the shop's settings, newest first: all of them, or one
+ * kind. Read from the audit log, which is where every change is recorded.
+ */
+export async function listSettingsHistory(
+  options: { type?: SettingsChangeType; limit?: number } = {},
+): Promise<SettingsChange[]> {
+  const types = options.type ? [options.type] : SETTINGS_CHANGE_TYPES.map((type) => type.slug);
   const entries = await prisma.auditLog.findMany({
     where: {
       entityType: "ShopSettings",
-      action: {
-        in: [
-          "settings.update-payment",
-          "settings.clear-payment",
-          "settings.update-whatsapp",
-          "settings.update-delivery",
-        ],
-      },
+      action: { in: types.flatMap((type) => ACTIONS[type]) },
     },
     orderBy: { createdAt: "desc" },
-    take: limit,
+    take: options.limit ?? 20,
     select: {
       id: true,
       action: true,
@@ -300,6 +315,7 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
 
   return entries.map((entry) => ({
     id: entry.id,
+    type: typeOf(entry.action),
     createdAt: entry.createdAt,
     actor: entry.actor?.name ?? entry.actor?.email ?? "a script",
     changes:
@@ -316,6 +332,13 @@ export async function listPaymentSettingsHistory(limit = 10): Promise<PaymentSet
             ? describeDeliveryChanges(asRecord(entry.before), asRecord(entry.after))
             : describeChanges(asRecord(entry.before), asRecord(entry.after)),
   }));
+}
+
+function typeOf(action: string): SettingsChangeType {
+  return (
+    SETTINGS_CHANGE_TYPES.find((type) => ACTIONS[type.slug].includes(action as AuditAction))
+      ?.slug ?? "payment"
+  );
 }
 
 const FIELD_LABELS: Record<string, string> = {

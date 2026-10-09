@@ -4,11 +4,12 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { getPaymentDetails, getShopWhatsApp } from "@/lib/shop/settings";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
+import { saveDeliverySettings } from "./delivery-settings";
 import {
   clearPaymentSettings,
   getPaymentSettingsFormValues,
   getWhatsAppFormValue,
-  listPaymentSettingsHistory,
+  listSettingsHistory,
   savePaymentSettings,
   saveWhatsAppNumber,
 } from "./payment-settings";
@@ -65,7 +66,7 @@ describe("savePaymentSettings", () => {
 
     await savePaymentSettings({ value: { ...TILL, number: "999999" }, actorId: cashier.id });
 
-    const [latest] = await listPaymentSettingsHistory();
+    const [latest] = await listSettingsHistory();
     expect(latest.actor).toBe("Otieno");
     expect(latest.changes).toEqual(["Number: 123456 → 999999"]);
   });
@@ -131,7 +132,7 @@ describe("clearPaymentSettings", () => {
       before: { method: "TILL", number: "123456", name: "THE THRIFT PLUG" },
     });
 
-    const [latest] = await listPaymentSettingsHistory();
+    const [latest] = await listSettingsHistory();
     expect(latest.changes).toEqual([
       "Payment details removed: checkout shows payment as not set up",
     ]);
@@ -166,7 +167,7 @@ describe("saveWhatsAppNumber", () => {
 
     expect(await getShopWhatsApp()).toBe("254712345678");
     expect(await getWhatsAppFormValue()).toBe("0712 345 678");
-    const [latest] = await listPaymentSettingsHistory();
+    const [latest] = await listSettingsHistory();
     expect(latest.changes).toEqual(["WhatsApp number: (none) → 0712 345 678"]);
   });
 
@@ -196,5 +197,29 @@ describe("saveWhatsAppNumber", () => {
     await saveWhatsAppNumber({ raw: "0712345678", actorId: owner.id });
 
     expect((await getPaymentDetails())?.number).toBe("123456");
+  });
+});
+
+describe("listSettingsHistory", () => {
+  it("lists every kind of change newest first, or only the kind asked for", async () => {
+    const owner = await staff();
+    await savePaymentSettings({ value: TILL, actorId: owner.id });
+    await saveWhatsAppNumber({ raw: "0712345678", actorId: owner.id });
+    await saveDeliverySettings({
+      value: { pickupAddress: "HH Towers", areas: [] },
+      actorId: owner.id,
+    });
+
+    expect((await listSettingsHistory()).map((change) => change.type)).toEqual([
+      "delivery",
+      "whatsapp",
+      "payment",
+    ]);
+    expect(await listSettingsHistory({ type: "whatsapp" })).toMatchObject([
+      { type: "whatsapp", actor: "Wanjiru", changes: ["WhatsApp number: (none) → 0712 345 678"] },
+    ]);
+    expect((await listSettingsHistory({ type: "delivery" }))[0].changes).toEqual([
+      "Pickup point: (none) → HH Towers",
+    ]);
   });
 });

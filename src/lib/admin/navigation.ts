@@ -30,12 +30,18 @@ export type NavItem = {
   children?: NavChild[];
 };
 
-/** A sub-page. Same permission as its parent: a group is one screen split up. */
+/** A sub-page, shown only to people allowed to open it. */
 export type NavChild = { href: string; label: string };
+
+/** Children as configured: a permission of their own, where it differs from the parent's. */
+type NavChildEntry = NavChild & { permission?: Permission };
 
 export type NavSection = { title: string; items: NavItem[] };
 
-type NavEntry = NavItem & { permission: Permission | null };
+type NavEntry = Omit<NavItem, "children"> & {
+  permission: Permission | null;
+  children?: NavChildEntry[];
+};
 
 const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
   {
@@ -60,6 +66,16 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         icon: "products",
         permission: Permission.PRODUCTS_VIEW,
         ready: true,
+        // Shop-wide places only: a single product's Photos or Stock are tabs
+        // on that product, since the menu can't know which product is meant.
+        children: [
+          { href: "/admin/products", label: "All products" },
+          {
+            href: "/admin/products/new",
+            label: "New product",
+            permission: Permission.PRODUCTS_EDIT,
+          },
+        ],
       },
       {
         href: "/admin/customers",
@@ -118,9 +134,28 @@ export function adminNavFor(
         icon,
         ready,
         ...(counts[icon] ? { count: counts[icon] } : {}),
-        ...(children ? { children: children.map((child) => ({ ...child })) } : {}),
+        ...(children
+          ? {
+              children: children
+                .filter((child) => !child.permission || can(access, child.permission))
+                .map(({ href, label }) => ({ href, label })),
+            }
+          : {}),
       })),
   })).filter((section) => section.items.length > 0);
+}
+
+/**
+ * Which of a group's sub-pages is current: the most specific match, so
+ * /admin/products/new lights up New product rather than All products, while
+ * a product's own pages light up All products.
+ */
+export function activeChild(children: NavChild[], pathname: string): string | null {
+  return (
+    children
+      .filter((child) => isActive(child.href, pathname))
+      .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null
+  );
 }
 
 /**

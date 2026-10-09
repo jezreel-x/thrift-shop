@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Permission } from "@/generated/prisma/enums";
-import { adminNavFor, isActive } from "./navigation";
+import { activeChild, adminNavFor, isActive } from "./navigation";
 import { resolveAccess } from "./permissions";
 
 const labels = (sections: ReturnType<typeof adminNavFor>) =>
@@ -94,5 +94,32 @@ describe("adminNavFor counts", () => {
       .find((item) => item.label === "Orders");
 
     expect(orders).not.toHaveProperty("count");
+  });
+});
+
+describe("the Products group", () => {
+  const children = (permissions: Permission[]) =>
+    adminNavFor(resolveAccess("u1", [{ name: "Role", isSuperAdmin: false, permissions }])!)
+      .flatMap((section) => section.items)
+      .find((item) => item.label === "Products")
+      ?.children?.map((child) => child.label);
+
+  it("offers New product only to staff who can add products", () => {
+    expect(children([Permission.PRODUCTS_VIEW, Permission.PRODUCTS_EDIT])).toEqual([
+      "All products",
+      "New product",
+    ]);
+    expect(children([Permission.PRODUCTS_VIEW])).toEqual(["All products"]);
+  });
+
+  it("lights the most specific sub-page", () => {
+    const items = [
+      { href: "/admin/products", label: "All products" },
+      { href: "/admin/products/new", label: "New product" },
+    ];
+
+    expect(activeChild(items, "/admin/products/new")).toBe("/admin/products/new");
+    expect(activeChild(items, "/admin/products/abc123/photos")).toBe("/admin/products");
+    expect(activeChild(items, "/admin/orders")).toBeNull();
   });
 });

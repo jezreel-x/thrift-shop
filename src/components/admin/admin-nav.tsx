@@ -13,7 +13,13 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { type NavIcon, type NavItem, type NavSection, isActive } from "@/lib/admin/navigation";
+import {
+  type NavIcon,
+  type NavItem,
+  type NavSection,
+  activeChild,
+  isActive,
+} from "@/lib/admin/navigation";
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -83,6 +89,7 @@ export function AdminNav({
 function Group({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = ICONS[item.icon];
   const current = isActive(item.href, pathname);
+  const currentChild = activeChild(item.children ?? [], pathname);
 
   return (
     <details key={String(current)} open={current} className="group">
@@ -98,7 +105,7 @@ function Group({ item, pathname }: { item: NavItem; pathname: string }) {
       </summary>
       <ul className="mt-0.5 ml-5 flex flex-col gap-0.5 border-l border-border pl-2">
         {item.children?.map((child) => {
-          const active = isActive(child.href, pathname);
+          const active = child.href === currentChild;
 
           return (
             <li key={child.href}>

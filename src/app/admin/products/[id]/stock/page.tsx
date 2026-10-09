@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 
 import { Notice } from "@/components/admin/notice";
 import { ProductForm } from "@/components/admin/product-form";
-import { WithdrawProduct } from "@/components/admin/withdraw-product";
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
@@ -11,25 +10,19 @@ import { getProductForEdit } from "@/lib/admin/products";
 import { prisma } from "@/lib/prisma";
 import { listCategories } from "@/lib/shop/categories";
 
-type Props = PageProps<"/admin/products/[id]">;
+type Props = PageProps<"/admin/products/[id]/stock">;
 
 export const generateMetadata = staffTitle<Props>(async ({ params }) => {
   const { id } = await params;
   const product = await prisma.product.findUnique({ where: { id }, select: { title: true } });
 
-  return product?.title ?? "Product";
+  return `Stock · ${product?.title ?? "Product"}`;
 }, Permission.PRODUCTS_EDIT);
 
-const NOTICES: Record<string, string> = {
-  saved: "Saved.",
-  withdrawn: "Taken off the shop.",
-  restored: "Back on the shop.",
-};
-
-/** The Details tab: name, category, price and the rest; and taking it off the shop. */
-export default async function ProductDetailsPage({ params, searchParams }: Props) {
+/** The Stock tab: colours, the colour × size grid, and its prices. */
+export default async function ProductStockGridPage({ params, searchParams }: Props) {
   const { id } = await params;
-  await requirePermission(Permission.PRODUCTS_EDIT, `/admin/products/${id}`);
+  await requirePermission(Permission.PRODUCTS_EDIT, `/admin/products/${id}/stock`);
 
   const [product, categories, query] = await Promise.all([
     getProductForEdit(id),
@@ -38,25 +31,27 @@ export default async function ProductDetailsPage({ params, searchParams }: Props
   ]);
   if (!product) notFound();
 
-  const notice = typeof query.notice === "string" ? NOTICES[query.notice] : undefined;
+  const kept = typeof query.kept === "string" && /^\d+$/.test(query.kept) ? Number(query.kept) : 0;
 
   return (
     <>
-      {notice && <Notice>{notice}</Notice>}
+      {query.notice === "saved" && (
+        <Notice>
+          Saved.
+          {kept > 0 &&
+            ` ${kept === 1 ? "One size you cleared is" : `${kept} sizes you cleared are`} on past orders, so ${kept === 1 ? "it was" : "they were"} kept at 0 rather than removed.`}
+        </Notice>
+      )}
 
       <ProductForm
-        // A fresh form after each save.
+        // A fresh grid after each save: new cells now have ids and fresh stock.
         key={product.version}
-        part="details"
+        part="stock"
         initial={product}
         categories={categories}
         conditions={CONDITION_OPTIONS}
         genders={GENDER_OPTIONS}
       />
-
-      <div className="mt-12">
-        <WithdrawProduct productId={product.id!} withdrawn={product.withdrawn} />
-      </div>
     </>
   );
 }

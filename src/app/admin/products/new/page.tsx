@@ -27,8 +27,8 @@ export default async function NewProductPage() {
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">New product</h1>
       <p className="mt-1 text-sm text-muted">
-        It goes live on the shop as soon as you create it with stock. Add photos once it&apos;s
-        created.
+        It goes live on the shop as soon as you create it with stock. Photos come next, on the
+        product&apos;s Photos tab.
       </p>
 
       <div className="mt-8">

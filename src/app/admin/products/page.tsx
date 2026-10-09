@@ -135,7 +135,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
                   product={product}
                   // Without PRODUCTS_EDIT there is no form to open; the stock page,
                   // where sales and holds are recorded, needs only PRODUCTS_VIEW.
-                  href={`/admin/products/${product.id}${canEdit ? "" : "/stock"}`}
+                  href={`/admin/products/${product.id}${canEdit ? "" : "/sales"}`}
                 />
               </li>
             ))}

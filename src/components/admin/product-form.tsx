@@ -30,11 +30,17 @@ export function ProductForm({
   categories,
   conditions,
   genders,
+  part = "all",
 }: {
   initial: ProductFormValues;
   categories: CategoryInfo[];
   conditions: Option[];
   genders: Option[];
+  /**
+   * Which part of the product this form edits: "details" or "stock" on a
+   * product's tabs, each saving only its own part, or "all" to create one.
+   */
+  part?: "all" | "details" | "stock";
 }) {
   const [state, formAction, saving] = useActionState<ProductFormState, FormData>(
     saveProductAction,
@@ -155,7 +161,8 @@ export function ProductForm({
       noValidate
     >
       <input type="hidden" name="productId" value={initial.id ?? ""} />
-      <input type="hidden" name="grid" value={JSON.stringify(grid)} />
+      <input type="hidden" name="part" value={part} />
+      {part !== "details" && <input type="hidden" name="grid" value={JSON.stringify(grid)} />}
 
       {Object.keys(errors).length > 0 && (
         <p
@@ -167,315 +174,330 @@ export function ProductForm({
         </p>
       )}
 
-      <section aria-labelledby="details" className="grid gap-4 sm:grid-cols-2">
-        <h2 id="details" className="text-lg font-semibold sm:col-span-2">
-          Details
-        </h2>
+      {part !== "stock" && (
+        <section aria-labelledby="details" className="grid gap-4 sm:grid-cols-2">
+          <h2
+            id="details"
+            // On its own tab the tab names it; kept for screen readers.
+            className={part === "all" ? "text-lg font-semibold sm:col-span-2" : "sr-only"}
+          >
+            Details
+          </h2>
 
-        <Field label="Name" error={errors.title} className="sm:col-span-2">
-          {(props) => (
-            <input
-              {...props}
-              name="title"
-              defaultValue={initial.title}
-              maxLength={120}
-              placeholder="Cargo Pants"
-            />
-          )}
-        </Field>
-
-        <Field label="Category" error={errors.categoryId}>
-          {(props) => (
-            <select
-              {...props}
-              name="categoryId"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-            >
-              <option value="">Choose…</option>
-              {categories.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-
-        <Field
-          label="Price"
-          hint="In shillings. Sizes or colours that cost more are set in the grid."
-          error={errors.price}
-        >
-          {(props) => (
-            <input
-              {...props}
-              name="price"
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-              inputMode="decimal"
-              placeholder="1,400"
-            />
-          )}
-        </Field>
-
-        <Field label="Brand" hint="Optional." error={errors.brand}>
-          {(props) => (
-            <input
-              {...props}
-              name="brand"
-              defaultValue={initial.brand}
-              maxLength={60}
-              placeholder="Levi's"
-            />
-          )}
-        </Field>
-
-        {category?.showCondition && (
-          <Field label="Condition" error={errors.condition}>
+          <Field label="Name" error={errors.title} className="sm:col-span-2">
             {(props) => (
-              <select {...props} name="condition" defaultValue={initial.condition}>
+              <input
+                {...props}
+                name="title"
+                defaultValue={initial.title}
+                maxLength={120}
+                placeholder="Cargo Pants"
+              />
+            )}
+          </Field>
+
+          <Field label="Category" error={errors.categoryId}>
+            {(props) => (
+              <select
+                {...props}
+                name="categoryId"
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+              >
                 <option value="">Choose…</option>
-                {conditions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                {categories.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </select>
             )}
           </Field>
-        )}
 
-        {category?.showFit && (
-          <Field label="Fit" error={errors.gender}>
+          <Field
+            label="Price"
+            hint="In shillings. Sizes or colours that cost more are set in the grid."
+            error={errors.price}
+          >
             {(props) => (
-              <select {...props} name="gender" defaultValue={initial.gender}>
-                <option value="">Choose…</option>
-                {genders.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <input
+                {...props}
+                name="price"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                inputMode="decimal"
+                placeholder="1,400"
+              />
             )}
           </Field>
-        )}
 
-        <Field
-          label="Description"
-          hint="Optional. Fabric, fit, measurements, flaws."
-          error={errors.description}
-          className="sm:col-span-2"
-        >
-          {(props) => (
-            <textarea
-              {...props}
-              name="description"
-              defaultValue={initial.description}
-              rows={4}
-              maxLength={2000}
-            />
+          <Field label="Brand" hint="Optional." error={errors.brand}>
+            {(props) => (
+              <input
+                {...props}
+                name="brand"
+                defaultValue={initial.brand}
+                maxLength={60}
+                placeholder="Levi's"
+              />
+            )}
+          </Field>
+
+          {category?.showCondition && (
+            <Field label="Condition" error={errors.condition}>
+              {(props) => (
+                <select {...props} name="condition" defaultValue={initial.condition}>
+                  <option value="">Choose…</option>
+                  {conditions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
           )}
-        </Field>
-      </section>
 
-      <section aria-labelledby="stock">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="stock" className="text-lg font-semibold">
-              Stock
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm text-muted">
-              {category
-                ? "Units on the shelf for each combination. Leave a cell empty if you don't make it; 0 means sold out."
-                : "Choose a category first: it decides the sizes."}
-            </p>
-          </div>
-          {category && (
-            <div
-              role="group"
-              aria-label="Show"
-              className="flex rounded-lg border border-border bg-surface-muted/50 p-0.5 text-sm"
-            >
-              {(["stock", "price"] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={mode === option}
-                  onClick={() => setMode(option)}
-                  className={`rounded-md px-3 py-1.5 transition ${
-                    mode === option
-                      ? "bg-surface font-medium shadow-sm"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {option === "stock" ? "Stock" : "Prices"}
-                </button>
-              ))}
-            </div>
+          {category?.showFit && (
+            <Field label="Fit" error={errors.gender}>
+              {(props) => (
+                <select {...props} name="gender" defaultValue={initial.gender}>
+                  <option value="">Choose…</option>
+                  {genders.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
           )}
-        </div>
 
-        {category && (
-          <>
-            {mode === "price" && (
-              <p className="mt-3 text-sm text-muted">
-                Empty cells cost the base price{price ? ` (KSh ${price})` : ""}. Set a whole{" "}
-                {category.option2Name?.toLowerCase() ?? "column"} or{" "}
-                {category.option1Name?.toLowerCase() ?? "row"} at once from its edge; a single cell
-                beats both.
+          <Field
+            label="Description"
+            hint="Optional. Fabric, fit, measurements, flaws."
+            error={errors.description}
+            className="sm:col-span-2"
+          >
+            {(props) => (
+              <textarea
+                {...props}
+                name="description"
+                defaultValue={initial.description}
+                rows={4}
+                maxLength={2000}
+              />
+            )}
+          </Field>
+        </section>
+      )}
+
+      {part !== "details" && (
+        <section aria-labelledby="stock">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="stock" className={part === "all" ? "text-lg font-semibold" : "sr-only"}>
+                Stock
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted">
+                {category
+                  ? "Units on the shelf for each combination. Leave a cell empty if you don't make it; 0 means sold out."
+                  : "Choose a category first: it decides the sizes."}
               </p>
+              {part === "stock" && category && (
+                <p className="mt-1 max-w-2xl text-sm text-muted">
+                  {category.name} · base price KSh {price}. Both are set on the Details tab.
+                </p>
+              )}
+            </div>
+            {category && (
+              <div
+                role="group"
+                aria-label="Show"
+                className="flex rounded-lg border border-border bg-surface-muted/50 p-0.5 text-sm"
+              >
+                {(["stock", "price"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={mode === option}
+                    onClick={() => setMode(option)}
+                    className={`rounded-md px-3 py-1.5 transition ${
+                      mode === option
+                        ? "bg-surface font-medium shadow-sm"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {option === "stock" ? "Stock" : "Prices"}
+                  </button>
+                ))}
+              </div>
             )}
+          </div>
 
-            <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface">
-              <table className="w-full min-w-max border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-[11px] tracking-wider text-muted uppercase">
-                    <th
-                      scope="col"
-                      className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-medium"
-                    >
-                      {category.option1Name ?? ""}
-                    </th>
-                    {columns.map((column) => (
+          {category && (
+            <>
+              {mode === "price" && (
+                <p className="mt-3 text-sm text-muted">
+                  Empty cells cost the base price{price ? ` (KSh ${price})` : ""}. Set a whole{" "}
+                  {category.option2Name?.toLowerCase() ?? "column"} or{" "}
+                  {category.option1Name?.toLowerCase() ?? "row"} at once from its edge; a single
+                  cell beats both.
+                </p>
+              )}
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface">
+                <table className="w-full min-w-max border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-[11px] tracking-wider text-muted uppercase">
                       <th
-                        key={column ?? "none"}
                         scope="col"
-                        className="px-1 py-2 text-center font-medium normal-case"
+                        className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-medium"
                       >
-                        {column ?? "Stock"}
-                        {column !== null && !category.option2Values.includes(column) && (
-                          <span className="block text-[10px] text-amber-700 dark:text-amber-400">
-                            not in {category.name}
-                          </span>
-                        )}
+                        {category.option1Name ?? ""}
                       </th>
-                    ))}
-                    {mode === "price" && rows[0] !== null && (
-                      <th scope="col" className="px-2 py-2 text-center font-medium">
-                        All
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const rowKey = row?.key ?? null;
-                    const rowError = row ? errors[`swatch:${row.key}`] : undefined;
-
-                    return (
-                      <tr key={rowKey ?? "none"} className="border-b border-border last:border-0">
-                        {/* Pinned, so the colour stays in view while the sizes scroll on a phone. */}
+                      {columns.map((column) => (
                         <th
-                          scope="row"
-                          className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-normal"
+                          key={column ?? "none"}
+                          scope="col"
+                          className="px-1 py-2 text-center font-medium normal-case"
                         >
-                          {row ? (
-                            <SwatchEditor
-                              swatch={row}
-                              label={category.option1Name ?? "Colour"}
-                              error={rowError}
-                              onChange={(change) => {
-                                markEdited(`swatch:${row.key}`);
-                                setSwatches((current) =>
-                                  current.map((swatch) =>
-                                    swatch.key === row.key ? { ...swatch, ...change } : swatch,
-                                  ),
-                                );
-                              }}
-                              onRemove={() => removeSwatch(row.key)}
-                            />
-                          ) : (
-                            <span className="text-muted">
-                              {category.option1Name
-                                ? `One ${category.option1Name.toLowerCase()}`
-                                : ""}
+                          {column ?? "Stock"}
+                          {column !== null && !category.option2Values.includes(column) && (
+                            <span className="block text-[10px] text-amber-700 dark:text-amber-400">
+                              not in {category.name}
                             </span>
                           )}
                         </th>
+                      ))}
+                      {mode === "price" && rows[0] !== null && (
+                        <th scope="col" className="px-2 py-2 text-center font-medium">
+                          All
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const rowKey = row?.key ?? null;
+                      const rowError = row ? errors[`swatch:${row.key}`] : undefined;
+
+                      return (
+                        <tr key={rowKey ?? "none"} className="border-b border-border last:border-0">
+                          {/* Pinned, so the colour stays in view while the sizes scroll on a phone. */}
+                          <th
+                            scope="row"
+                            className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-normal"
+                          >
+                            {row ? (
+                              <SwatchEditor
+                                swatch={row}
+                                label={category.option1Name ?? "Colour"}
+                                error={rowError}
+                                onChange={(change) => {
+                                  markEdited(`swatch:${row.key}`);
+                                  setSwatches((current) =>
+                                    current.map((swatch) =>
+                                      swatch.key === row.key ? { ...swatch, ...change } : swatch,
+                                    ),
+                                  );
+                                }}
+                                onRemove={() => removeSwatch(row.key)}
+                              />
+                            ) : (
+                              <span className="text-muted">
+                                {category.option1Name
+                                  ? `One ${category.option1Name.toLowerCase()}`
+                                  : ""}
+                              </span>
+                            )}
+                          </th>
+                          {columns.map((column) => (
+                            <td key={column ?? "none"} className="p-1 text-center">
+                              <CellInput
+                                mode={mode}
+                                cell={cells.get(cellKey(rowKey, column))}
+                                label={[row?.name, column].filter(Boolean).join(" ") || "Stock"}
+                                basePrice={price}
+                                held={heldFor(cells.get(cellKey(rowKey, column)), initial.held)}
+                                error={errors[cellKey(rowKey, column)]}
+                                onChange={(change) => updateCell(rowKey, column, change)}
+                              />
+                            </td>
+                          ))}
+                          {mode === "price" && row !== null && (
+                            <td className="p-1">
+                              <LinePrice
+                                label={`Price for every ${row.name || "new colour"}`}
+                                cells={columns.map((column) => cells.get(cellKey(rowKey, column)))}
+                                onChange={(value) =>
+                                  columns.forEach((column) =>
+                                    updateCell(rowKey, column, { price: value }),
+                                  )
+                                }
+                              />
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {mode === "price" && columns[0] !== null && (
+                    <tfoot>
+                      <tr className="border-t border-border">
+                        <th
+                          scope="row"
+                          className="sticky left-0 z-10 bg-surface px-3 py-2 text-left text-[11px] font-medium tracking-wider text-muted uppercase"
+                        >
+                          Every {category.option1Name?.toLowerCase() ?? "row"}
+                        </th>
                         {columns.map((column) => (
-                          <td key={column ?? "none"} className="p-1 text-center">
-                            <CellInput
-                              mode={mode}
-                              cell={cells.get(cellKey(rowKey, column))}
-                              label={[row?.name, column].filter(Boolean).join(" ") || "Stock"}
-                              basePrice={price}
-                              held={heldFor(cells.get(cellKey(rowKey, column)), initial.held)}
-                              error={errors[cellKey(rowKey, column)]}
-                              onChange={(change) => updateCell(rowKey, column, change)}
-                            />
-                          </td>
-                        ))}
-                        {mode === "price" && row !== null && (
-                          <td className="p-1">
+                          <td key={column ?? "none"} className="p-1">
                             <LinePrice
-                              label={`Price for every ${row.name || "new colour"}`}
-                              cells={columns.map((column) => cells.get(cellKey(rowKey, column)))}
+                              label={`Price for every ${column}`}
+                              cells={rows.map((row) =>
+                                cells.get(cellKey(row?.key ?? null, column)),
+                              )}
                               onChange={(value) =>
-                                columns.forEach((column) =>
-                                  updateCell(rowKey, column, { price: value }),
+                                rows.forEach((row) =>
+                                  updateCell(row?.key ?? null, column, { price: value }),
                                 )
                               }
                             />
                           </td>
-                        )}
+                        ))}
+                        {rows[0] !== null && <td />}
                       </tr>
-                    );
-                  })}
-                </tbody>
-                {mode === "price" && columns[0] !== null && (
-                  <tfoot>
-                    <tr className="border-t border-border">
-                      <th
-                        scope="row"
-                        className="sticky left-0 z-10 bg-surface px-3 py-2 text-left text-[11px] font-medium tracking-wider text-muted uppercase"
-                      >
-                        Every {category.option1Name?.toLowerCase() ?? "row"}
-                      </th>
-                      {columns.map((column) => (
-                        <td key={column ?? "none"} className="p-1">
-                          <LinePrice
-                            label={`Price for every ${column}`}
-                            cells={rows.map((row) => cells.get(cellKey(row?.key ?? null, column)))}
-                            onChange={(value) =>
-                              rows.forEach((row) =>
-                                updateCell(row?.key ?? null, column, { price: value }),
-                              )
-                            }
-                          />
-                        </td>
-                      ))}
-                      {rows[0] !== null && <td />}
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
 
-            {category.option1Name && (
-              <button
-                type="button"
-                onClick={addSwatch}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
-              >
-                <Plus aria-hidden className="size-4" />
-                Add {category.option1Name.toLowerCase()}
-              </button>
-            )}
+              {category.option1Name && (
+                <button
+                  type="button"
+                  onClick={addSwatch}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
+                >
+                  <Plus aria-hidden className="size-4" />
+                  Add {category.option1Name.toLowerCase()}
+                </button>
+              )}
 
-            {gridErrors.length > 0 && (
-              <ul role="alert" className="mt-3 space-y-1 text-sm text-red-700 dark:text-red-300">
-                {gridErrors.map(([key, message]) => (
-                  <li key={key}>
-                    {describeErrorKey(key, swatches)}
-                    {message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </section>
+              {gridErrors.length > 0 && (
+                <ul role="alert" className="mt-3 space-y-1 text-sm text-red-700 dark:text-red-300">
+                  {gridErrors.map(([key, message]) => (
+                    <li key={key}>
+                      {describeErrorKey(key, swatches)}
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </section>
+      )}
 
       <div className="flex items-center gap-3">
         <button
@@ -483,7 +505,13 @@ export function ProductForm({
           disabled={saving}
           className="rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
         >
-          {saving ? "Saving…" : initial.id ? "Save changes" : "Create product"}
+          {saving
+            ? "Saving…"
+            : part === "details"
+              ? "Save details"
+              : part === "stock"
+                ? "Save stock"
+                : "Create product"}
         </button>
       </div>
     </form>

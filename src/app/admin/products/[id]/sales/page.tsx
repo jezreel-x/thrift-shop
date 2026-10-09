@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, MessageCircle, Pencil } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -19,13 +19,13 @@ import { prisma } from "@/lib/prisma";
 import { siteUrl } from "@/lib/site";
 import { whatsAppShareLink } from "@/lib/whatsapp";
 
-type Props = PageProps<"/admin/products/[id]/stock">;
+type Props = PageProps<"/admin/products/[id]/sales">;
 
 export const generateMetadata = staffTitle<Props>(async ({ params }) => {
   const { id } = await params;
   const product = await prisma.product.findUnique({ where: { id }, select: { title: true } });
 
-  return `Stock · ${product?.title ?? "Product"}`;
+  return `Sales & holds · ${product?.title ?? "Product"}`;
 }, Permission.PRODUCTS_VIEW);
 
 const DONE: Record<string, string> = {
@@ -53,18 +53,17 @@ const SMALL_BUTTON =
 const SMALL_INPUT =
   "rounded-md border border-border bg-transparent px-2 py-1.5 text-xs focus:border-foreground focus:outline-none";
 
-export default async function ProductStockPage({ params, searchParams }: Props) {
+export default async function ProductSalesPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { access } = await requirePermission(
     Permission.PRODUCTS_VIEW,
-    `/admin/products/${id}/stock`,
+    `/admin/products/${id}/sales`,
   );
 
   const [view, query] = await Promise.all([getStockView(id), searchParams]);
   if (!view) notFound();
 
   const allowed = {
-    edit: can(access, Permission.PRODUCTS_EDIT),
     markSold: can(access, Permission.PRODUCTS_MARK_SOLD),
     hold: can(access, Permission.PRODUCTS_HOLD),
   };
@@ -92,43 +91,9 @@ export default async function ProductStockPage({ params, searchParams }: Props) 
       : null;
 
   return (
-    <main className="mx-auto w-full max-w-5xl">
-      <Link
-        href="/admin/products"
-        className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
-      >
-        <ArrowLeft aria-hidden className="size-4" />
-        Products
-      </Link>
-
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{product.title}</h1>
-          <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            {allowed.edit && (
-              <Link
-                href={`/admin/products/${product.id}`}
-                className="inline-flex items-center gap-1 transition hover:text-foreground"
-              >
-                <Pencil aria-hidden className="size-3.5" />
-                Edit product
-              </Link>
-            )}
-            {product.withdrawn ? (
-              <span className="text-amber-700 dark:text-amber-400">Off the shop</span>
-            ) : (
-              <Link
-                href={`/products/${product.slug}`}
-                target="_blank"
-                className="inline-flex items-center gap-1 transition hover:text-foreground"
-              >
-                View on the shop
-                <ExternalLink aria-hidden className="size-3.5" />
-              </Link>
-            )}
-          </p>
-        </div>
-        {share && (
+    <div>
+      {share && (
+        <div className="flex justify-end">
           <a
             href={share}
             target="_blank"
@@ -138,8 +103,8 @@ export default async function ProductStockPage({ params, searchParams }: Props) 
             <MessageCircle aria-hidden className="size-4" />
             Share to WhatsApp
           </a>
-        )}
-      </div>
+        </div>
+      )}
 
       {(done || error) && (
         <p
@@ -281,7 +246,7 @@ export default async function ProductStockPage({ params, searchParams }: Props) 
           </>
         )}
       </section>
-    </main>
+    </div>
   );
 }
 

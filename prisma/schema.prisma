@@ -441,6 +441,12 @@ model ShopSettings {
   // shop doesn't offer pickup.
   pickupAddress String?
 
+  // The most of one item (one colour and size) a buyer can put in an order.
+  // A checkout holds stock while payment is checked, so without a limit one
+  // buyer could hold a whole size for a day. Null: no limit. Owner's choice,
+  // in Settings → Shop rules.
+  maxPerItem Int? @default(5)
+
   updatedAt DateTime @updatedAt
 }
 

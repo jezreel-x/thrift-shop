@@ -11,6 +11,7 @@ import {
   saveDeliverySettings,
 } from "./delivery-settings";
 import { centsToInput } from "./products";
+import { parseShopRules, saveShopRules } from "./shop-rules";
 import {
   type PaymentSettingsField,
   clearPaymentSettings,
@@ -134,4 +135,27 @@ export async function saveDeliverySettingsAction(
       fee: centsToInput(area.feeCents),
     })),
   };
+}
+
+export type ShopRulesFormState = { error?: string; saved?: "changed" | "unchanged" };
+
+/** Saves the shop's rules. SETTINGS_EDIT, like every setting buyers see the effect of. */
+export async function saveShopRulesAction(
+  _previous: ShopRulesFormState,
+  formData: FormData,
+): Promise<ShopRulesFormState> {
+  const { user } = await requirePermission(Permission.SETTINGS_EDIT);
+
+  const parsed = parseShopRules({
+    maxPerItem: String(formData.get("maxPerItem") ?? ""),
+    noLimit: formData.get("noLimit") === "on",
+  });
+  if (!parsed.ok) return { error: parsed.error };
+
+  const { changed } = await saveShopRules({ value: parsed.value, actorId: user.id });
+
+  // Product pages, cards and carts all offer quantities from this.
+  revalidatePath("/", "layout");
+
+  return { saved: changed ? "changed" : "unchanged" };
 }

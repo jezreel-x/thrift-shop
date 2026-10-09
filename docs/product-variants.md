@@ -22,7 +22,7 @@ two buyers can never both get the last one — carries over intact.
 | What can a buyer choose? | **Up to two options per product, named per category.** Option 1 is the _look_ (Colour, Metal) and gets swatches and its own photos; option 2 is the _fit or amount_ (Size, Waist, Ring size, Volume) and gets buttons. Either may be absent. |
 | Photos                   | **Per option-1 value**, Nike-style: choosing Khaki or Gold swaps the photos. Photos tied to no value are shared.                                                                                                                             |
 | Price                    | **Per variant**, defaulting to the product's price. The admin sets it at three levels: base, per option value (every 36 costs KSh 1,600; every Gold ring KSh 3,000), or per cell. The most specific wins.                                    |
-| Quantity                 | **Up to the units free right now, and never more than 5 per line.**                                                                                                                                                                          |
+| Quantity                 | **Up to the units free right now, within the shop's per-item limit (default 5).**                                                                                                                                                            |
 | "Only N left"            | **Shown at 3 or fewer.**                                                                                                                                                                                                                     |
 | Option-1 names           | **Free text chosen by the owner**, with a colour dot they pick. Shops name colours their own way.                                                                                                                                            |
 | Categories               | **Data the owner manages, not a fixed list in the database schema.** A category carries its option names, its size list, and whether Condition and Fit apply.                                                                                |
@@ -275,7 +275,9 @@ carries today's shop exactly before anything is built on it.
 
 - **Hiding sold-out products.** The Thrift Plug shows sold pieces, which suits
   thrift; a mall shop may prefer them hidden. A per-shop setting, later.
-- **The quantity cap.** 5 per line suits retail. It becomes a per-shop setting if
-  a shop sells in bulk.
+- **The quantity cap.** _Done 9 October 2026:_ a per-shop setting, Settings →
+  Shop rules, default 5, or no limit. Checkout holds stock while payment is
+  checked by hand, which is what made a cap matter; with automatic payment the
+  holds shrink to minutes and the cap becomes plain shop policy.
 - **Multi-tenancy** stays out of scope (second paying client). Nothing here makes
   it harder: categories becoming data is, if anything, a step towards it.

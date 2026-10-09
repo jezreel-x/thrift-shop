@@ -143,14 +143,15 @@ function CardAction({
 
   if (inCartQuantity > 0) {
     return (
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">In your cart</span>
+      <div className="mt-2 flex items-start justify-between gap-2">
+        <span className="pt-2 text-xs text-neutral-500 dark:text-neutral-400">In your cart</span>
         <QuantityStepper
           variantId={product.quickAdd.variantId}
           quantity={inCartQuantity}
           max={Math.max(inCartQuantity, product.quickAdd.maxQuantity)}
           label={product.title}
           size="sm"
+          limitReason={product.quickAdd.limitReason}
         />
       </div>
     );

@@ -1,5 +1,12 @@
 import { prisma } from "../prisma";
-import { MAX_PER_LINE, type VariantAvailability, freeUnits, maxQuantity } from "./availability";
+import {
+  type LimitReason,
+  type VariantAvailability,
+  clampQuantity,
+  freeUnits,
+  quantityLimit,
+} from "./availability";
+import { getShopRules } from "./settings";
 import { getAvailability } from "./reservations";
 
 /**
@@ -40,8 +47,10 @@ export type CartLine = {
    * free. Less than `quantity` means stock fell since it was added.
    */
   quantityAvailable: number;
-  /** The most the stepper may offer: what is free, capped per line. */
+  /** The most the stepper may offer: what is free, within the shop's per-item limit. */
   maxQuantity: number;
+  /** What sets that most: the shop's limit, or what's left. Said when + stops. */
+  limitReason: LimitReason;
   image: { url: string; alt: string | null; width: number; height: number } | null;
   /** False when none of this can be bought. */
   available: boolean;
@@ -149,7 +158,7 @@ export async function mergeAnonymousCart(
 
 /**
  * Adds units of a variant. Adding a variant already in the cart raises its
- * quantity, never past {@link MAX_PER_LINE}.
+ * quantity, never past the shop's per-item limit.
  *
  * Deliberately does not check stock. A cart may hold something somebody else is
  * checking out with, because that person may not complete; the cart is checked
@@ -165,7 +174,8 @@ export async function addToCart(cartId: string, variantId: string, quantity = 1)
   // put in a cart.
   if (!variant) return;
 
-  const adding = clampQuantity(quantity);
+  const { maxPerItem } = await getShopRules();
+  const adding = clampQuantity(quantity, maxPerItem);
 
   await prisma.$transaction(async (tx) => {
     const existing = await tx.cartItem.findUnique({
@@ -176,7 +186,7 @@ export async function addToCart(cartId: string, variantId: string, quantity = 1)
     await tx.cartItem.upsert({
       where: { cartId_variantId: { cartId, variantId } },
       create: { cartId, productId: variant.productId, variantId, quantity: adding },
-      update: { quantity: clampQuantity((existing?.quantity ?? 0) + adding) },
+      update: { quantity: clampQuantity((existing?.quantity ?? 0) + adding, maxPerItem) },
     });
   });
 
@@ -191,9 +201,10 @@ export async function setCartQuantity(
 ): Promise<void> {
   if (quantity <= 0) return removeFromCart(cartId, variantId);
 
+  const { maxPerItem } = await getShopRules();
   await prisma.cartItem.updateMany({
     where: { cartId, variantId },
-    data: { quantity: clampQuantity(quantity) },
+    data: { quantity: clampQuantity(quantity, maxPerItem) },
   });
   await touch(cartId);
 }
@@ -216,6 +227,7 @@ export async function clearCart(cartId: string): Promise<void> {
  * own hold as somebody else's.
  */
 export async function getCartContents(cartId: string, holderId?: string): Promise<CartContents> {
+  const { maxPerItem } = await getShopRules();
   const items = await prisma.cartItem.findMany({
     where: { cartId },
     orderBy: { createdAt: "asc" },
@@ -255,6 +267,7 @@ export async function getCartContents(cartId: string, holderId?: string): Promis
     const { product } = variant;
     const counts = availability.get(variant.id) ?? { stock: 0, heldByOthers: 0 };
     const reason = unavailableReason(product.deletedAt, counts);
+    const limit = quantityLimit(counts, maxPerItem);
 
     return [
       {
@@ -267,7 +280,8 @@ export async function getCartContents(cartId: string, holderId?: string): Promis
         priceCents: variant.priceCents ?? product.priceCents,
         quantity,
         quantityAvailable: reason ? 0 : Math.min(quantity, freeUnits(counts)),
-        maxQuantity: reason ? 0 : maxQuantity(counts),
+        maxQuantity: reason ? 0 : limit.max,
+        limitReason: limit.reason,
         image: product.images[0] ?? null,
         available: reason === undefined,
         ...(reason ? { reason } : {}),
@@ -309,11 +323,6 @@ function unavailableReason(
   if (freeUnits(counts) <= 0) return "held";
 
   return undefined;
-}
-
-/** A whole number from 1 to {@link MAX_PER_LINE}. */
-function clampQuantity(quantity: number): number {
-  return Math.min(MAX_PER_LINE, Math.max(1, Math.trunc(quantity) || 1));
 }
 
 function touch(cartId: string) {

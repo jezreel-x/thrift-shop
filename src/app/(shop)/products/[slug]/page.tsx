@@ -12,7 +12,8 @@ import { getProductBySlug } from "@/lib/shop/products";
 import { type Selection, resolveChoice } from "@/lib/shop/variant-choice";
 import { VariantPicker } from "@/components/variant-picker";
 import { OrderOnWhatsApp } from "@/components/order-on-whatsapp";
-import { getShopWhatsApp } from "@/lib/shop/settings";
+import { getShopRules, getShopWhatsApp } from "@/lib/shop/settings";
+import { quantityLimit } from "@/lib/shop/availability";
 import { siteUrl } from "@/lib/site";
 import { orderMessage } from "@/lib/shop/whatsapp-order";
 
@@ -94,8 +95,15 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
   );
   const images = ofSwatch.length > 0 ? ofSwatch : product.images;
 
-  const [cart, whatsapp] = await Promise.all([readCart(), getShopWhatsApp()]);
+  const [cart, whatsapp, rules] = await Promise.all([
+    readCart(),
+    getShopWhatsApp(),
+    getShopRules(),
+  ]);
   const inCartQuantity = cart?.lines.find((line) => line.variantId === variant?.id)?.quantity ?? 0;
+  // How many the buyer may have, and whether the shop's limit or stock decides it.
+  const limit = quantityLimit(variant ?? { stock: 0, heldByOthers: 0 }, rules.maxPerItem);
+  const swatchName = product.swatches.find((swatch) => swatch.id === variant?.swatchId)?.name;
   const option2Name = product.categoryRef?.option2Name ?? "Size";
   const needs =
     choice.needs === "option1"
@@ -205,7 +213,9 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
           <div className="mt-6">
             <AddToCart
               variantId={variant?.id ?? null}
-              maxQuantity={variant ? Math.min(choice.free, 5) : 0}
+              maxQuantity={variant ? limit.max : 0}
+              limitReason={limit.reason}
+              label={[product.title, swatchName, variant?.option2].filter(Boolean).join(", ")}
               inCartQuantity={inCartQuantity}
               needs={needs}
             />

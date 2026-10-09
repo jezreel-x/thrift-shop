@@ -3,14 +3,16 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "../prisma";
 import {
   AVAILABILITY_RANK,
+  type LimitReason,
   type ProductAvailability,
   type VariantAvailability,
   freeUnits,
-  maxQuantity,
   productAvailability,
+  quantityLimit,
 } from "./availability";
 import { effectivePrice, priceSummary } from "./variant-choice";
 import { getAvailability } from "./reservations";
+import { getShopRules } from "./settings";
 
 /**
  * Catalogue queries.
@@ -79,7 +81,7 @@ export type ProductCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }
    * The one variant, when there is nothing to choose: the card can add it to a
    * cart directly. Null when the buyer must pick a colour or size first.
    */
-  quickAdd: { variantId: string; maxQuantity: number } | null;
+  quickAdd: { variantId: string; maxQuantity: number; limitReason: LimitReason } | null;
 };
 
 export type ProductListPage = {
@@ -175,6 +177,7 @@ export async function listProducts({
  */
 export async function getProductCards(ids: string[]): Promise<ProductCard[]> {
   if (ids.length === 0) return [];
+  const { maxPerItem } = await getShopRules();
 
   const cards = await prisma.product.findMany({
     where: { id: { in: ids } },
@@ -212,7 +215,12 @@ export async function getProductCards(ids: string[]): Promise<ProductCard[]> {
         ],
         fromPriceCents: summary.priceCents,
         priceVaries: summary.varies,
-        quickAdd: only ? { variantId: only.id, maxQuantity: maxQuantity(only) } : null,
+        quickAdd: only
+          ? (() => {
+              const limit = quantityLimit(only, maxPerItem);
+              return { variantId: only.id, maxQuantity: limit.max, limitReason: limit.reason };
+            })()
+          : null,
       },
     ];
   });

@@ -3,8 +3,11 @@
  * tested directly; the queries that feed it live in reservations.ts.
  */
 
-/** Never more than this many of one variant in a cart line or an order line. */
-export const MAX_PER_LINE = 5;
+/**
+ * The most of one item (one colour and size) in an order, unless the owner
+ * sets otherwise in Settings → Shop rules. Null there means no limit.
+ */
+export const DEFAULT_MAX_PER_ITEM = 5;
 
 export type VariantAvailability = {
   /** Units in the shop and not yet sold. */
@@ -18,9 +21,44 @@ export function freeUnits({ stock, heldByOthers }: VariantAvailability): number 
   return Math.max(0, stock - heldByOthers);
 }
 
-/** The most this shopper may put on one line: what is free, capped per line. */
-export function maxQuantity(availability: VariantAvailability): number {
-  return Math.min(freeUnits(availability), MAX_PER_LINE);
+/**
+ * The most this shopper may put on one line: what is free, within the shop's
+ * per-item limit (null: no limit).
+ */
+export function maxQuantity(availability: VariantAvailability, cap: number | null): number {
+  return cap === null ? freeUnits(availability) : Math.min(freeUnits(availability), cap);
+}
+
+/** Why a buyer can't add more: the shop's per-item limit, or what's left. */
+export type LimitReason = "cap" | "stock";
+
+/** The most a buyer may have of one item, and what decides it. */
+export function quantityLimit(
+  availability: VariantAvailability,
+  cap: number | null,
+): { max: number; reason: LimitReason } {
+  const free = freeUnits(availability);
+
+  return cap !== null && cap <= free ? { max: cap, reason: "cap" } : { max: free, reason: "stock" };
+}
+
+/**
+ * What a buyer is told when + stops, so a greyed-out button isn't a mystery.
+ * The shop's limit says why it exists; stock just says there's no more.
+ */
+export function limitNote(reason: LimitReason, max: number): string {
+  if (reason === "cap") {
+    return `The shop sells up to ${max} of each item per order, so there's enough to go round.`;
+  }
+
+  return max === 1 ? "That's the last one." : `That's all there is right now: ${max} left.`;
+}
+
+/** A whole number of at least 1, within the shop's per-item limit (null: no limit). */
+export function clampQuantity(quantity: number, cap: number | null): number {
+  const whole = Math.max(1, Math.trunc(quantity) || 1);
+
+  return cap === null ? whole : Math.min(cap, whole);
 }
 
 /**

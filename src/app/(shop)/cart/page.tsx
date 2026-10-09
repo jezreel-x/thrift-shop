@@ -173,6 +173,7 @@ function CartRow({ line }: { line: CartLine }) {
               quantity={line.quantity}
               max={line.maxQuantity}
               label={[line.title, line.swatch, line.size].filter(Boolean).join(", ")}
+              limitReason={line.limitReason}
             />
           </div>
         )}

@@ -1,5 +1,8 @@
+import { cache } from "react";
+
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { prisma } from "../prisma";
+import { DEFAULT_MAX_PER_ITEM } from "./availability";
 import type { DeliveryOptions } from "./delivery";
 
 /**
@@ -95,3 +98,22 @@ export async function getDeliveryOptions(): Promise<DeliveryOptions> {
 
   return { pickupAddress: settings?.pickupAddress ?? null, areas };
 }
+
+/** Rules the owner sets for every buyer. */
+export type ShopRules = {
+  /** The most of one item (one colour and size) per order; null for no limit. */
+  maxPerItem: number | null;
+};
+
+/**
+ * The shop's rules, once per request: the product page, its cards and the
+ * cart all ask. With no settings saved yet, the defaults.
+ */
+export const getShopRules = cache(async (): Promise<ShopRules> => {
+  const settings = await prisma.shopSettings.findUnique({
+    where: { id: SINGLETON },
+    select: { maxPerItem: true },
+  });
+
+  return { maxPerItem: settings ? settings.maxPerItem : DEFAULT_MAX_PER_ITEM };
+});

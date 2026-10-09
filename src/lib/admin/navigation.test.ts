@@ -43,7 +43,7 @@ describe("adminNavFor", () => {
     }
   });
 
-  it("splits Settings into its four pages, each under /admin/settings", () => {
+  it("splits Settings into its pages, each under /admin/settings", () => {
     const owner = resolveAccess("u1", [{ name: "Owner", isSuperAdmin: true, permissions: [] }]);
     const settings = adminNavFor(owner!)
       .flatMap((section) => section.items)
@@ -53,6 +53,7 @@ describe("adminNavFor", () => {
       "Payment details",
       "WhatsApp",
       "Pickup & delivery",
+      "Shop rules",
       "Recent changes",
     ]);
     for (const child of settings?.children ?? []) {

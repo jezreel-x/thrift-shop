@@ -99,6 +99,7 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
           { href: "/admin/settings/payment", label: "Payment details" },
           { href: "/admin/settings/whatsapp", label: "WhatsApp" },
           { href: "/admin/settings/delivery", label: "Pickup & delivery" },
+          { href: "/admin/settings/rules", label: "Shop rules" },
           { href: "/admin/settings/changes", label: "Recent changes" },
         ],
       },

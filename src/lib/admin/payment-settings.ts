@@ -3,6 +3,7 @@ import { formatPhone, normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 import { type AuditAction, recordAudit } from "./audit";
 import { describeDeliveryChanges } from "./delivery-settings";
+import { describeRulesChange } from "./shop-rules";
 
 /**
  * Where buyers send money, as set by the owner.
@@ -269,6 +270,7 @@ export const SETTINGS_CHANGE_TYPES = [
   { slug: "payment", label: "Payment details" },
   { slug: "whatsapp", label: "WhatsApp" },
   { slug: "delivery", label: "Pickup & delivery" },
+  { slug: "rules", label: "Shop rules" },
 ] as const;
 
 export type SettingsChangeType = (typeof SETTINGS_CHANGE_TYPES)[number]["slug"];
@@ -277,6 +279,7 @@ const ACTIONS: Record<SettingsChangeType, AuditAction[]> = {
   payment: ["settings.update-payment", "settings.clear-payment"],
   whatsapp: ["settings.update-whatsapp"],
   delivery: ["settings.update-delivery"],
+  rules: ["settings.update-rules"],
 };
 
 export type SettingsChange = {
@@ -330,7 +333,9 @@ export async function listSettingsHistory(
             ]
           : entry.action === "settings.update-delivery"
             ? describeDeliveryChanges(asRecord(entry.before), asRecord(entry.after))
-            : describeChanges(asRecord(entry.before), asRecord(entry.after)),
+            : entry.action === "settings.update-rules"
+              ? describeRulesChange(entry.before, entry.after)
+              : describeChanges(asRecord(entry.before), asRecord(entry.after)),
   }));
 }
 

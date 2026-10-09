@@ -22,7 +22,16 @@ export type NavItem = {
   ready: boolean;
   /** Something waiting on this screen, such as payments to confirm. */
   count?: number;
+  /**
+   * Sub-pages, shown indented under this item. An item with children opens
+   * and closes rather than being a page of its own; its href is where the
+   * icon-only sidebar sends people, since there is no room for the children.
+   */
+  children?: NavChild[];
 };
+
+/** A sub-page. Same permission as its parent: a group is one screen split up. */
+export type NavChild = { href: string; label: string };
 
 export type NavSection = { title: string; items: NavItem[] };
 
@@ -70,6 +79,12 @@ const ADMIN_NAV: readonly { title: string; items: readonly NavEntry[] }[] = [
         icon: "settings",
         permission: Permission.SETTINGS_EDIT,
         ready: true,
+        children: [
+          { href: "/admin/settings/payment", label: "Payment details" },
+          { href: "/admin/settings/whatsapp", label: "WhatsApp" },
+          { href: "/admin/settings/delivery", label: "Pickup & delivery" },
+          { href: "/admin/settings/changes", label: "Recent changes" },
+        ],
       },
       {
         href: "/admin/staff",
@@ -97,12 +112,13 @@ export function adminNavFor(
     title: section.title,
     items: section.items
       .filter((item) => item.permission === null || can(access, item.permission))
-      .map(({ href, label, icon, ready }) => ({
+      .map(({ href, label, icon, ready, children }) => ({
         href,
         label,
         icon,
         ready,
         ...(counts[icon] ? { count: counts[icon] } : {}),
+        ...(children ? { children: children.map((child) => ({ ...child })) } : {}),
       })),
   })).filter((section) => section.items.length > 0);
 }

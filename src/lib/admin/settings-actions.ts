@@ -40,7 +40,7 @@ export async function savePaymentSettingsAction(
   const { changed } = await savePaymentSettings({ value: parsed.value, actorId: user.id });
 
   // The change history on the settings page reads the audit log.
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings", "layout");
 
   return { saved: changed ? "changed" : "unchanged" };
 }
@@ -54,7 +54,7 @@ export async function clearPaymentSettingsAction(): Promise<void> {
 
   await clearPaymentSettings({ actorId: user.id });
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings", "layout");
 }
 
 export type WhatsAppFormState = { error?: string; saved?: "changed" | "unchanged" };
@@ -72,7 +72,7 @@ export async function saveWhatsAppAction(
   });
   if (!result.ok) return { error: result.error };
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings", "layout");
 
   return { saved: result.changed ? "changed" : "unchanged" };
 }
@@ -121,7 +121,7 @@ export async function saveDeliverySettingsAction(
   const result = await saveDeliverySettings({ value: parsed.value, actorId: user.id });
   if (!result.ok) return { errors: { areas: result.error } };
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings", "layout");
   revalidatePath("/checkout");
 
   const saved = await getDeliverySettings();

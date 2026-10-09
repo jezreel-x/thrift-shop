@@ -387,13 +387,15 @@ describe("quantities against stock", () => {
     expect((await getCartContents(cart.id)).lines).toHaveLength(0);
   });
 
-  it("refuses a sixth unit at the database, whatever the code does", async () => {
+  // The upper limit is the owner's setting, applied where items are added (see
+  // shop-rules.integration.test.ts); the database keeps only what is always true.
+  it("refuses a line of zero at the database, whatever the code does", async () => {
     const product = await makeProduct({}, { stock: 9 });
     const cart = await resolveCart({});
     await addToCart(cart.id, product.variantId);
 
     await expect(
-      db.cartItem.updateMany({ where: { cartId: cart.id }, data: { quantity: 6 } }),
+      db.cartItem.updateMany({ where: { cartId: cart.id }, data: { quantity: 0 } }),
     ).rejects.toThrow();
   });
 });

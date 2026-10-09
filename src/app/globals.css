@@ -87,3 +87,20 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/*
+ * A dropdown's list of options is drawn by the browser, from the <select>'s own
+ * background. Most selects here are transparent so they sit on whatever card
+ * they're in, and Chrome on Windows then draws the list white while the text
+ * stays the theme's light colour: pale on white in dark mode. The options get
+ * the theme's colours explicitly, for every dropdown at once.
+ */
+select option,
+select optgroup {
+  background-color: var(--surface);
+  color: var(--foreground);
+}
+
+select option:disabled {
+  color: var(--muted);
+}

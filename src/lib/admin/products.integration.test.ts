@@ -5,7 +5,14 @@ import { reserveVariant } from "@/lib/shop/reservations";
 import { categoryIdFor, stockOf } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { type DraftCell, type ProductDraft, cellKey } from "./product-form";
-import { getProductForEdit, listAdminProducts, saveProduct, setProductWithdrawn } from "./products";
+import {
+  getProductForEdit,
+  listAdminProducts,
+  saveProduct,
+  saveProductDetails,
+  saveProductStock,
+  setProductWithdrawn,
+} from "./products";
 
 cleanDatabaseBetweenTests();
 
@@ -336,5 +343,81 @@ describe("listAdminProducts and withdrawing", () => {
     );
     expect(lists.map((list) => list.total)).toEqual([0, 1]);
     expect(await db.auditLog.count({ where: { action: "product.withdraw" } })).toBe(1);
+  });
+});
+
+/** The Details tab's part of a draft. */
+function detailsOf(draft: ProductDraft) {
+  const { title, description, brand, priceCents, categoryId, condition, gender } = draft;
+
+  return { title, description, brand, priceCents, categoryId, condition, gender };
+}
+
+describe("saving one tab at a time", () => {
+  it("saves the details without touching the grid", async () => {
+    const owner = await staff();
+    const { id, draft } = await created([{ stock: 3 }], owner.id);
+    const details = detailsOf(draft);
+
+    const result = await saveProductDetails({
+      productId: id,
+      details: { ...details, title: "Cargo Pants, relaxed fit", priceCents: 150_000 },
+      actorId: owner.id,
+    });
+
+    expect(result.ok).toBe(true);
+    const product = await db.product.findUniqueOrThrow({
+      where: { id },
+      include: { variants: true, swatches: true },
+    });
+    expect([product.title, product.priceCents]).toEqual(["Cargo Pants, relaxed fit", 150_000]);
+    expect(product.variants.map((variant) => variant.stock)).toEqual([3]);
+    expect(product.swatches.map((swatch) => swatch.name).sort()).toEqual(["Black", "Khaki"]);
+  });
+
+  it("saves the stock without touching the details", async () => {
+    const owner = await staff();
+    const { id, draft } = await created([{ stock: 3 }], owner.id);
+    draft.cells[0].stock = 7;
+
+    const result = await saveProductStock({
+      productId: id,
+      grid: { swatches: draft.swatches, cells: draft.cells },
+      actorId: owner.id,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await stockOf(draft.cells[0].id!)).toBe(7);
+    expect((await db.product.findUniqueOrThrow({ where: { id } })).title).toBe("Cargo Pants");
+  });
+
+  it("refuses a category the product's colours wouldn't fit", async () => {
+    const owner = await staff();
+    const { id, draft } = await created([{ stock: 1 }], owner.id);
+    const noColours = await db.productCategory.create({
+      data: {
+        slug: "plain-test",
+        name: "Plain",
+        option2Name: "Size",
+        option2Values: ["M"],
+      },
+    });
+    const details = detailsOf(draft);
+
+    try {
+      const result = await saveProductDetails({
+        productId: id,
+        details: { ...details, categoryId: noColours.id },
+        actorId: owner.id,
+      });
+
+      expect(!result.ok && result.errors.categoryId).toMatch(/Plain has no colours/);
+      expect((await db.product.findUniqueOrThrow({ where: { id } })).categoryId).toBe(
+        details.categoryId,
+      );
+    } finally {
+      // Categories are reference data the per-test reset leaves alone.
+      await db.productCategory.delete({ where: { id: noColours.id } });
+    }
   });
 });

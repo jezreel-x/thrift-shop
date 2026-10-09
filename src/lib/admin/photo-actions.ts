@@ -81,7 +81,7 @@ async function revalidateProduct(productId: string): Promise<void> {
     select: { slug: true },
   });
 
-  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath(`/admin/products/${productId}`, "layout");
   revalidatePath("/admin/products");
   revalidatePath("/");
   if (product) revalidatePath(`/products/${product.slug}`);

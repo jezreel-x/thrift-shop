@@ -106,6 +106,35 @@ export function parseProductForm(input: {
    */
   existingOption2?: string[];
 }): DraftResult {
+  const details = parseProductDetails({ fields: input.fields, categories: input.categories });
+  const category = input.categories.find((candidate) => candidate.id === input.fields.categoryId);
+  const grid = category
+    ? parseStockGrid({
+        grid: input.grid,
+        category,
+        existingOption2: input.existingOption2,
+        baseCents: details.ok ? details.details.priceCents : readPrice(input.fields.price),
+      })
+    : null;
+
+  const errors = {
+    ...(details.ok ? {} : details.errors),
+    ...(grid && !grid.ok ? grid.errors : {}),
+  };
+  if (!details.ok || !grid?.ok || Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return { ok: true, draft: { ...details.details, ...grid.grid } };
+}
+
+export type DetailsResult =
+  | { ok: true; details: Omit<ProductDraft, "swatches" | "cells"> }
+  | { ok: false; errors: FormErrors };
+
+/** The Details tab: name, category, price, brand, condition, fit, description. */
+export function parseProductDetails(input: {
+  fields: Record<string, string>;
+  categories: CategoryInfo[];
+}): DetailsResult {
   const { fields } = input;
   const errors: FormErrors = {};
 
@@ -140,37 +169,13 @@ export function parseProductForm(input: {
     if (!gender) errors.gender = "Choose who it's cut for.";
   }
 
-  const grid = readGrid(input.grid);
-  if (!grid) {
-    // Only a tampered or broken page sends this; the form always sends JSON.
-    return { ok: false, errors: { ...errors, grid: "The stock grid could not be read. Reload." } };
-  }
-
-  const swatches = category
-    ? readSwatches(grid, category, errors)
-    : { list: [], keys: new Set<string>() };
-  const cells = category
-    ? readCells(grid, {
-        category,
-        swatchKeys: swatches.keys,
-        hasSwatches: swatches.list.length > 0,
-        existingOption2: new Set(input.existingOption2 ?? []),
-        baseCents: priceCents,
-        errors,
-      })
-    : [];
-
-  if (category && cells.length === 0 && !hasGridErrors(errors)) {
-    errors.grid = "Enter stock for at least one size: 0 if it's sold out, 1 for a single item.";
-  }
-
   if (Object.keys(errors).length > 0 || !category || priceCents === null) {
     return { ok: false, errors };
   }
 
   return {
     ok: true,
-    draft: {
+    details: {
       title,
       description: description || null,
       brand: brand || null,
@@ -178,10 +183,48 @@ export function parseProductForm(input: {
       categoryId: category.id,
       condition,
       gender,
-      swatches: swatches.list,
-      cells,
     },
   };
+}
+
+export type GridResult =
+  { ok: true; grid: Pick<ProductDraft, "swatches" | "cells"> } | { ok: false; errors: FormErrors };
+
+/**
+ * The Stock tab: colours and the grid, read against the product's category
+ * and base price (a cell priced at the base is stored as the base).
+ */
+export function parseStockGrid(input: {
+  /** The grid's hidden field, as JSON. */
+  grid: string;
+  category: CategoryInfo;
+  existingOption2?: string[];
+  baseCents: number | null;
+}): GridResult {
+  const errors: FormErrors = {};
+
+  const grid = readGrid(input.grid);
+  if (!grid) {
+    // Only a tampered or broken page sends this; the form always sends JSON.
+    return { ok: false, errors: { grid: "The stock grid could not be read. Reload." } };
+  }
+
+  const swatches = readSwatches(grid, input.category, errors);
+  const cells = readCells(grid, {
+    category: input.category,
+    swatchKeys: swatches.keys,
+    hasSwatches: swatches.list.length > 0,
+    existingOption2: new Set(input.existingOption2 ?? []),
+    baseCents: input.baseCents,
+    errors,
+  });
+
+  if (cells.length === 0 && !hasGridErrors(errors)) {
+    errors.grid = "Enter stock for at least one size: 0 if it's sold out, 1 for a single item.";
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return { ok: true, grid: { swatches: swatches.list, cells } };
 }
 
 function readSwatches(

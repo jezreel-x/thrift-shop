@@ -93,7 +93,7 @@ async function finish(formData: FormData, result: StockResult, done: string): Pr
     revalidatePath("/admin/products");
   }
 
-  redirect(productId ? `/admin/products/${productId}/stock?${params}` : "/admin/products");
+  redirect(productId ? `/admin/products/${productId}/sales?${params}` : "/admin/products");
 }
 
 function field(formData: FormData, name: string): string {

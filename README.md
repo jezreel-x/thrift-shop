@@ -220,12 +220,16 @@ for when Actions is available.
   - Order queue, payment settings, order tracking ✅
   - Colour × size variants, categories as data, the storefront for them ✅
   - "You may also like" and Order on WhatsApp ✅
-  - Product management: stock grid, photos, stock page ✅
-  - Delivery at checkout: pickup, or delivery to an area for its fee ← _next_
-  - Demo mode, then the contract migration
+  - Product management: stock grid, photos, product tabs, stock page ✅
+  - Delivery at checkout: pickup, or delivery to an area for its fee ✅
+  - The contract migration, the customer register, and a staff and roles screen ✅
+  - Shop rules (the per-item limit) and settings pages ✅
+  - **Payments** ← _next_: the buyer chooses how to pay; M-Pesa STK Push, verified
+    till payments and later cards, all settled by one rule. See
+    [docs/payments.md](docs/payments.md)
   - Fulfilment: order status to the door, a delivery code, pay on delivery
-  - Customer register, and a staff and roles screen
-- **Phase 4 — Operations.** Notifications, reports, CSV export.
+  - Demo mode
+- **Phase 4 — Operations.** Notifications, reports and analytics, CSV export.
 
 ## Licence
 

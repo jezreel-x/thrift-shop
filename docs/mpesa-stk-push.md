@@ -2,6 +2,8 @@
 
 > **Status:** proposed. Nothing here is built yet. This records the plan and
 > the reasoning behind it, so the implementation can be reviewed against it.
+> It is phase P2 of the wider payments plan in [payments.md](payments.md),
+> where late payments on every path are settled by one rule.
 
 Today the shop confirms every payment by hand. The buyer pays the till
 themselves, types the M-Pesa code into checkout, and the owner matches it

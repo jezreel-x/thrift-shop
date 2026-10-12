@@ -10,9 +10,11 @@ import { OrderStatus } from "@/generated/prisma/enums";
 
 export const ORDER_TABS = [
   { slug: "to-confirm", status: OrderStatus.PENDING_CONFIRMATION, label: "To confirm" },
+  { slug: "needs-refund", status: OrderStatus.NEEDS_REFUND, label: "Needs refund" },
   { slug: "awaiting-payment", status: OrderStatus.AWAITING_PAYMENT, label: "Awaiting payment" },
   { slug: "confirmed", status: OrderStatus.CONFIRMED, label: "Confirmed" },
   { slug: "rejected", status: OrderStatus.REJECTED, label: "Rejected" },
+  { slug: "refunded", status: OrderStatus.REFUNDED, label: "Refunded" },
   { slug: "cancelled", status: OrderStatus.CANCELLED, label: "Cancelled" },
 ] as const;
 

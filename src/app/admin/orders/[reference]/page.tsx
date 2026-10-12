@@ -3,9 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MarkRefunded } from "@/components/admin/mark-refunded";
 import { OrderDecision } from "@/components/admin/order-decision";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
-import { OrderStatus, Permission } from "@/generated/prisma/enums";
+import { OrderStatus, PaymentChannel, PaymentStatus, Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
 import { getOrderForReview } from "@/lib/admin/orders";
@@ -102,6 +103,42 @@ export default async function AdminOrderPage({ params }: Props) {
             </section>
           )}
 
+          {order.payments.length > 0 && (
+            <section aria-labelledby="payments">
+              <h2
+                id="payments"
+                className="text-[11px] font-medium tracking-wider text-muted uppercase"
+              >
+                Payment history
+              </h2>
+              <ol className="mt-3 divide-y divide-border rounded-xl border border-border bg-surface text-sm">
+                {order.payments.map((payment) => (
+                  <li
+                    key={payment.id}
+                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 p-4"
+                  >
+                    <span className="font-medium">{CHANNEL_LABELS[payment.channel]}</span>
+                    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+                      {PAYMENT_STATUS_LABELS[payment.status]}
+                    </span>
+                    {payment.receipt && (
+                      <span className="font-mono text-xs tracking-wider">{payment.receipt}</span>
+                    )}
+                    <span className="tabular-nums">{formatPrice(payment.amountCents)}</span>
+                    <span className="ml-auto text-xs text-muted">
+                      {formatDateTime(
+                        payment.refundedAt ?? payment.receivedAt ?? payment.createdAt,
+                      )}
+                    </span>
+                    {payment.refundNote && (
+                      <p className="w-full text-xs text-muted">Refund: {payment.refundNote}</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
           {lapsed.length > 0 && (
             <p
               role="alert"
@@ -109,9 +146,9 @@ export default async function AdminOrderPage({ params }: Props) {
             >
               <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
               <span>
-                The hold on {lapsed.map((item) => item.title).join(", ")} has run out, so it may
-                have gone to another buyer. This order can&apos;t be confirmed. If the money
-                arrived, contact the buyer about a refund, then reject it.
+                The hold on {lapsed.map((item) => item.title).join(", ")} has run out. If you
+                confirm, it&apos;s sold if it&apos;s still available; if it has gone to another
+                buyer, the order moves to Needs refund and the money goes back to the buyer.
               </span>
             </p>
           )}
@@ -119,7 +156,7 @@ export default async function AdminOrderPage({ params }: Props) {
           {pending &&
             (can(access, Permission.ORDERS_CONFIRM_PAYMENT) ? (
               <section aria-label="Decision">
-                <OrderDecision orderId={order.id} total={total} canConfirm={lapsed.length === 0} />
+                <OrderDecision orderId={order.id} total={total} />
               </section>
             ) : (
               <p className="rounded-xl border border-border p-4 text-sm text-muted">
@@ -127,6 +164,33 @@ export default async function AdminOrderPage({ params }: Props) {
                 one.
               </p>
             ))}
+
+          {order.status === OrderStatus.NEEDS_REFUND && (
+            <section
+              aria-labelledby="refund"
+              className="rounded-xl border border-orange-300 bg-orange-50/60 p-5 dark:border-orange-900 dark:bg-orange-950/40"
+            >
+              <h2 id="refund" className="font-medium">
+                Send {total} back to the buyer
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                The payment arrived, but{" "}
+                {order.missing.length > 0 ? order.missing.join(", ") : "an item"} had sold by the
+                time it was confirmed, so nothing was sold. Refund the full amount to{" "}
+                <span className="tabular-nums">{formatPhone(order.buyerPhone)}</span>, then record
+                it here.
+              </p>
+              {can(access, Permission.ORDERS_CONFIRM_PAYMENT) ? (
+                <div className="mt-4">
+                  <MarkRefunded orderId={order.id} />
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted">
+                  Someone who can confirm payments records the refund.
+                </p>
+              )}
+            </section>
+          )}
 
           <section aria-labelledby="items">
             <h2 id="items" className="text-[11px] font-medium tracking-wider text-muted uppercase">
@@ -260,7 +324,7 @@ export default async function AdminOrderPage({ params }: Props) {
               )}
               {order.history.map((entry) => (
                 <Event key={entry.id} when={entry.createdAt}>
-                  {describe(entry.action)} by{" "}
+                  {describe(entry.action, entry.after)} by{" "}
                   {entry.actor?.name ?? entry.actor?.email ?? "a script"}
                   {detail(entry.after) && (
                     <span className="block text-muted">{detail(entry.after)}</span>
@@ -285,9 +349,16 @@ function Event({ when, children }: { when: Date; children: React.ReactNode }) {
   );
 }
 
-function describe(action: string): string {
-  if (action === "order.confirm-payment") return "Payment confirmed";
+function describe(action: string, after: unknown): string {
+  if (action === "order.confirm-payment") {
+    const status =
+      after && typeof after === "object" ? (after as { status?: unknown }).status : null;
+    return status === OrderStatus.NEEDS_REFUND
+      ? "Payment confirmed, but an item had sold: refund due"
+      : "Payment confirmed";
+  }
   if (action === "order.reject-payment") return "Payment rejected";
+  if (action === "order.mark-refunded") return "Refund sent";
   return action;
 }
 
@@ -320,7 +391,22 @@ function buyerMessage(
       return `${hi} Your payment of ${total} is confirmed. Thank you! We'll be in touch about delivery.`;
     case OrderStatus.REJECTED:
       return `${hi} We couldn't confirm your M-Pesa payment: ${order.reviewNote ?? ""} Reply here and we'll sort it out.`;
+    case OrderStatus.NEEDS_REFUND:
+      return `${hi} Your payment of ${total} arrived, but some of your pieces sold before we confirmed it. We're sorry. We're sending the full ${total} back to your M-Pesa.`;
+    case OrderStatus.REFUNDED:
+      return `${hi} We've sent your ${total} back to your M-Pesa. Sorry we couldn't fill this order.`;
     default:
       return `${hi} `;
   }
 }
+
+const CHANNEL_LABELS: Record<PaymentChannel, string> = {
+  [PaymentChannel.MPESA_MANUAL]: "M-Pesa, code entered by the buyer",
+};
+
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  [PaymentStatus.CLAIMED]: "Claimed",
+  [PaymentStatus.RECEIVED]: "Received",
+  [PaymentStatus.REJECTED]: "Rejected",
+  [PaymentStatus.REFUNDED]: "Refunded",
+};

@@ -115,7 +115,12 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
 function StatusExplanation({
   order,
 }: {
-  order: { status: OrderStatus; reviewNote: string | null };
+  order: {
+    status: OrderStatus;
+    reviewNote: string | null;
+    reference: string;
+    payments: { refundNote: string | null }[];
+  };
 }) {
   const message = {
     [OrderStatus.AWAITING_PAYMENT]:
@@ -127,13 +132,19 @@ function StatusExplanation({
     [OrderStatus.REJECTED]:
       "We could not match that payment, so the pieces have gone back on the rail.",
     [OrderStatus.CANCELLED]: "This order was cancelled and nothing was charged.",
+    [OrderStatus.NEEDS_REFUND]: `Your payment arrived, but some of your pieces sold before it was confirmed, so we can't fill this order. We'll send the full amount back to your M-Pesa. If you haven't heard from us within a day, message us quoting ${order.reference}.`,
+    [OrderStatus.REFUNDED]: "We've sent your payment back.",
   }[order.status];
+  const refund = order.payments.find((payment) => payment.refundNote)?.refundNote;
 
   return (
     <div className="mt-4 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
       <p>{message}</p>
       {order.reviewNote && order.status === OrderStatus.REJECTED && (
         <p className="mt-2 text-neutral-500 dark:text-neutral-500">{order.reviewNote}</p>
+      )}
+      {refund && order.status === OrderStatus.REFUNDED && (
+        <p className="mt-2 text-neutral-500 dark:text-neutral-500">{refund}</p>
       )}
     </div>
   );

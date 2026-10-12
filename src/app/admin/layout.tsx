@@ -9,7 +9,7 @@ import { MobileDrawer } from "@/components/admin/mobile-drawer";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { getStaffAccess } from "@/lib/admin/access";
 import { adminNavFor } from "@/lib/admin/navigation";
-import { countOrdersToConfirm } from "@/lib/admin/orders";
+import { countOrdersNeedingStaff } from "@/lib/admin/orders";
 import { can } from "@/lib/admin/permissions";
 import { isSidebarCollapsed } from "@/lib/admin/sidebar";
 import { setSidebarAction } from "@/lib/admin/sidebar-actions";
@@ -43,8 +43,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   // A hint, not a live counter: the layout keeps its render while moving
   // between admin pages, so the number refreshes after a decision (which
   // re-renders everything) or a reload, not on every click.
-  const toConfirm = can(access, Permission.ORDERS_VIEW) ? await countOrdersToConfirm() : 0;
-  const sections = adminNavFor(access, { orders: toConfirm });
+  // Payments to confirm and refunds owed: both wait on staff.
+  const waiting = can(access, Permission.ORDERS_VIEW) ? await countOrdersNeedingStaff() : 0;
+  const sections = adminNavFor(access, { orders: waiting });
   const collapsed = await isSidebarCollapsed();
 
   return (

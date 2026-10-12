@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OrderStatus } from "@/generated/prisma/enums";
+import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { addToCart, resolveCart } from "@/lib/shop/cart";
 import { beginCheckout, claimPayment } from "@/lib/shop/orders";
@@ -12,6 +12,7 @@ import {
   countOrdersByStatus,
   getOrderForReview,
   listOrdersForReview,
+  markRefunded,
   rejectOrder,
 } from "./orders";
 
@@ -74,9 +75,15 @@ describe("confirmOrder", () => {
 
     const result = await confirmOrder({ orderId, actorId: reviewer.id, note: " matched SMS " });
 
-    expect(result).toEqual({ ok: true, reference });
+    expect(result).toEqual({ ok: true, reference, outcome: "confirmed" });
     const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.CONFIRMED);
+    // The buyer's claim is now a received payment.
+    expect(await db.payment.findFirstOrThrow({ where: { orderId } })).toMatchObject({
+      status: PaymentStatus.RECEIVED,
+      receipt: order.mpesaCode,
+      amountCents: order.totalCents,
+    });
     expect(order.reviewNote).toBe("matched SMS");
     for (const product of products) expect(await stateOf(product)).toBe("SOLD");
 
@@ -89,11 +96,9 @@ describe("confirmOrder", () => {
     });
   });
 
-  it("sells nothing if any hold has lapsed, and leaves the order pending", async () => {
-    // The lapsed item may be in another buyer's checkout by now. Selling the
-    // rest and stopping would leave an order half-confirmed.
+  it("sells a lapsed order whose units are still free: the buyer paid, so the shop keeps its word", async () => {
     const [kept, lapsed] = [await makeProduct(), await makeProduct({ title: "Denim jacket" })];
-    const { orderId } = await claimedOrder([kept, lapsed]);
+    const { orderId, reference } = await claimedOrder([kept, lapsed]);
     await db.stockHold.updateMany({
       where: { variantId: lapsed.variantId },
       data: { expiresAt: new Date(Date.now() - 1000) },
@@ -101,12 +106,53 @@ describe("confirmOrder", () => {
 
     const result = await confirmOrder({ orderId, actorId: (await staff()).id });
 
-    expect(result).toEqual({ ok: false, reason: "hold-lapsed", titles: ["Denim jacket"] });
+    expect(result).toEqual({ ok: true, reference, outcome: "confirmed" });
+    expect(await stateOf(kept)).toBe("SOLD");
+    expect(await stateOf(lapsed)).toBe("SOLD");
+    expect(await db.stockHold.count()).toBe(0);
+  });
+
+  it("sells nothing and owes a refund when a lapsed unit went to someone else", async () => {
+    // All or nothing: the other item is still the buyer's, but selling half an
+    // order and refunding the rest is for the owner to arrange, not the system.
+    const [kept, lapsed] = [await makeProduct(), await makeProduct({ title: "Denim jacket" })];
+    const { orderId, reference } = await claimedOrder([kept, lapsed]);
+    await db.stockHold.updateMany({
+      where: { variantId: lapsed.variantId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    await releaseExpiredReservations();
+    await makeUser("other@example.com");
+    expect((await reserveVariant(lapsed.variantId, "other-buyer")).ok).toBe(true);
+
+    const result = await confirmOrder({ orderId, actorId: (await staff()).id });
+
+    expect(result).toEqual({
+      ok: true,
+      reference,
+      outcome: "needs-refund",
+      missing: ["Denim jacket"],
+    });
     expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe(
-      OrderStatus.PENDING_CONFIRMATION,
+      OrderStatus.NEEDS_REFUND,
     );
-    expect(await stateOf(kept)).toBe("HELD");
-    expect(await db.auditLog.count()).toBe(0);
+    // Nothing sold; the other buyer's hold untouched; this buyer's hold released.
+    expect(await db.productVariant.findMany({ select: { stock: true } })).toEqual([
+      { stock: 1 },
+      { stock: 1 },
+    ]);
+    expect(await db.stockHold.findMany({ select: { holder: true } })).toEqual([
+      { holder: "other-buyer" },
+    ]);
+    // The money did arrive.
+    expect((await db.payment.findFirstOrThrow({ where: { orderId } })).status).toBe(
+      PaymentStatus.RECEIVED,
+    );
+    expect(await db.auditLog.findFirstOrThrow({ where: { entityId: orderId } })).toMatchObject({
+      action: "order.confirm-payment",
+      after: { status: OrderStatus.NEEDS_REFUND, missing: ["Denim jacket"] },
+    });
+    expect((await getOrderForReview(reference))?.missing).toEqual(["Denim jacket"]);
   });
 
   it("will not confirm an order nobody has claimed payment for", async () => {
@@ -302,6 +348,8 @@ describe("the queue", () => {
       [OrderStatus.CONFIRMED]: 1,
       [OrderStatus.REJECTED]: 0,
       [OrderStatus.CANCELLED]: 0,
+      [OrderStatus.NEEDS_REFUND]: 0,
+      [OrderStatus.REFUNDED]: 0,
     });
   });
 
@@ -316,5 +364,76 @@ describe("the queue", () => {
       action: "order.confirm-payment",
       actor: { name: "Wanjiru" },
     });
+  });
+});
+
+describe("refunds", () => {
+  async function owedRefund() {
+    const product = await makeProduct({ title: "Denim jacket" });
+    const { orderId, reference } = await claimedOrder([product]);
+    await db.stockHold.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+    await releaseExpiredReservations();
+    await reserveVariant(product.variantId, "other-buyer");
+    await confirmOrder({ orderId, actorId: (await staff()).id });
+
+    return { orderId, reference };
+  }
+
+  it("records how the money went back, closing the order", async () => {
+    const { orderId, reference } = await owedRefund();
+    const reviewer = await staff();
+
+    expect(
+      await markRefunded({ orderId, actorId: reviewer.id, note: " Reversed, code SGK7T2XQ1B " }),
+    ).toEqual({ ok: true, reference });
+    expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe(
+      OrderStatus.REFUNDED,
+    );
+    expect(await db.payment.findFirstOrThrow({ where: { orderId } })).toMatchObject({
+      status: PaymentStatus.REFUNDED,
+      refundNote: "Reversed, code SGK7T2XQ1B",
+    });
+    expect(await db.auditLog.findFirst({ where: { action: "order.mark-refunded" } })).toMatchObject(
+      { actorId: reviewer.id, after: { note: "Reversed, code SGK7T2XQ1B" } },
+    );
+  });
+
+  it("refuses to mark refunded an order that owes nothing, or twice", async () => {
+    const { orderId } = await owedRefund();
+    const reviewer = await staff();
+    await markRefunded({ orderId, actorId: reviewer.id, note: "Reversed" });
+
+    expect(await markRefunded({ orderId, actorId: reviewer.id, note: "Again" })).toEqual({
+      ok: false,
+      reason: "not-owed",
+    });
+
+    const paid = await claimedOrder([await makeProduct()], {
+      email: "b@example.com",
+      name: "Baraka",
+      phone: "254722222222",
+    });
+    expect(await markRefunded({ orderId: paid.orderId, actorId: reviewer.id, note: "x" })).toEqual({
+      ok: false,
+      reason: "not-owed",
+    });
+  });
+});
+
+describe("payment records", () => {
+  it("records the buyer's claim, and its rejection", async () => {
+    const { orderId } = await claimedOrder([await makeProduct()]);
+    const claimed = await db.payment.findFirstOrThrow({ where: { orderId } });
+    expect(claimed).toMatchObject({
+      channel: "MPESA_MANUAL",
+      status: PaymentStatus.CLAIMED,
+      phone: "254712345678",
+    });
+
+    await rejectOrder({ orderId, actorId: (await staff()).id, reason: "No such payment" });
+
+    expect((await db.payment.findFirstOrThrow({ where: { orderId } })).status).toBe(
+      PaymentStatus.REJECTED,
+    );
   });
 });

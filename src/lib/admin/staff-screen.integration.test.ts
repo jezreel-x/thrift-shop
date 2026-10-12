@@ -189,11 +189,12 @@ describe("granting and revoking", () => {
   it("keeps an owner however many step down at the same moment", async () => {
     // Ten owners all revoking themselves at once. Without the lock, each counts
     // ten owners before any of them commits, and all ten succeed.
-    const owners = await Promise.all(
-      Array.from({ length: 10 }, (_, index) =>
-        owner(`owner${index}@example.com`, `Owner ${index}`),
-      ),
-    );
+    // Set up one at a time: creating the owner role is not what's being
+    // raced, only the stepping down.
+    const owners = [];
+    for (let index = 0; index < 10; index += 1) {
+      owners.push(await owner(`owner${index}@example.com`, `Owner ${index}`));
+    }
     const roleId = await ownerRoleId();
 
     const results = await Promise.all(

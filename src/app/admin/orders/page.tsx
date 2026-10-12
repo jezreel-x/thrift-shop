@@ -137,7 +137,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
               })}
             </ul>
 
-            <table className="hidden w-full min-w-[760px] text-left text-sm md:table">
+            <table className="hidden w-full min-w-190 text-left text-sm md:table">
               <thead className="border-b border-border text-[11px] tracking-wider text-muted uppercase">
                 <tr>
                   <th scope="col" className="px-4 py-3 font-medium">

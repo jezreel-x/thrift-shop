@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { Permission } from "@/generated/prisma/enums";
 import { requirePermission } from "./access";
-import { type DecisionResult, confirmOrder, rejectOrder } from "./orders";
+import { type DecisionResult, confirmOrder, markRefunded, rejectOrder } from "./orders";
 
 export type DecisionFormState = { error?: string };
 
@@ -73,13 +73,35 @@ function refusalMessage(result: Extract<DecisionResult, { ok: false }>): string 
       return "This order no longer exists.";
     case "already-decided":
       return "Someone has already decided this order. Reload the page to see what happened.";
-    case "hold-lapsed": {
-      const items = result.titles?.join(", ") ?? "An item";
-      return (
-        `The hold on ${items} ran out before this was confirmed, so it may have been sold to ` +
-        `someone else. Nothing was changed. If the money arrived, contact the buyer about a ` +
-        `refund, then reject the order.`
-      );
-    }
   }
+}
+
+/**
+ * Records that a buyer's money has been sent back. Same permission as
+ * confirming: both are statements about money that only trusted staff make.
+ */
+export async function markRefundedAction(
+  _previous: DecisionFormState,
+  formData: FormData,
+): Promise<DecisionFormState> {
+  const { user } = await requirePermission(Permission.ORDERS_CONFIRM_PAYMENT);
+
+  const orderId = String(formData.get("orderId") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  if (note.length < MIN_REASON) {
+    return { error: "Say how it was sent back, such as the M-Pesa reversal code." };
+  }
+  if (note.length > MAX_NOTE) return { error: `Keep it under ${MAX_NOTE} characters.` };
+
+  const result = await markRefunded({ orderId, actorId: user.id, note });
+  if (!result.ok) {
+    return {
+      error:
+        result.reason === "not-found"
+          ? "This order no longer exists."
+          : "This order isn't waiting for a refund. Reload the page to see what happened.",
+    };
+  }
+
+  showDecided(result.reference);
 }

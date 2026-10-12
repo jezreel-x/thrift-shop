@@ -35,4 +35,9 @@ const ORDER_BADGES: Record<OrderStatus, { label: string; className: string }> = 
     label: "Cancelled",
     className: "bg-neutral-300 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200",
   },
+  [OrderStatus.NEEDS_REFUND]: { label: "Refund due", className: "bg-orange-500 text-white" },
+  [OrderStatus.REFUNDED]: {
+    label: "Refunded",
+    className: "bg-neutral-300 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200",
+  },
 };

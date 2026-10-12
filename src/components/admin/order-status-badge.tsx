@@ -28,6 +28,14 @@ const BADGES: Record<OrderStatus, { label: string; className: string }> = {
     label: "Cancelled",
     className: "bg-surface-muted text-muted",
   },
+  [OrderStatus.NEEDS_REFUND]: {
+    label: "Needs refund",
+    className: "bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200",
+  },
+  [OrderStatus.REFUNDED]: {
+    label: "Refunded",
+    className: "bg-surface-muted text-muted",
+  },
 };
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {

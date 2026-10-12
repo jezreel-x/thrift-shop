@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 
-import { Fulfilment, OrderStatus } from "@/generated/prisma/enums";
+import { Fulfilment, OrderStatus, PaymentChannel, PaymentStatus } from "@/generated/prisma/enums";
 import { getCartContents } from "./cart";
 import { type DeliveryChoice, deliveryFee } from "./delivery";
 import { prisma } from "../prisma";
@@ -160,7 +160,14 @@ export async function claimPayment(
 
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
-    select: { id: true, reference: true, status: true, items: { select: { variantId: true } } },
+    select: {
+      id: true,
+      reference: true,
+      status: true,
+      totalCents: true,
+      buyerPhone: true,
+      items: { select: { variantId: true } },
+    },
   });
 
   if (!order) return { ok: false, reason: "not-found" };
@@ -177,10 +184,25 @@ export async function claimPayment(
   }
 
   try {
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.PENDING_CONFIRMATION, mpesaCode: code, claimedAt: new Date() },
-    });
+    // The order and its payment record change together. Both carry the code,
+    // and both refuse it twice, so one receipt can't pay for two orders
+    // whichever record is checked.
+    await prisma.$transaction([
+      prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.PENDING_CONFIRMATION, mpesaCode: code, claimedAt: new Date() },
+      }),
+      prisma.payment.create({
+        data: {
+          orderId,
+          channel: PaymentChannel.MPESA_MANUAL,
+          status: PaymentStatus.CLAIMED,
+          amountCents: order.totalCents,
+          receipt: code,
+          phone: order.buyerPhone,
+        },
+      }),
+    ]);
   } catch {
     // The unique constraint on mpesaCode is what decides this, not a preceding
     // lookup — two orders claiming the same code at once would both pass one.
@@ -195,6 +217,7 @@ export async function getOrder(reference: string, userId: string) {
   return prisma.order.findFirst({
     where: { reference, userId },
     include: {
+      payments: { select: { refundNote: true } },
       items: {
         include: {
           product: { select: { slug: true, images: { take: 1, orderBy: { position: "asc" } } } },

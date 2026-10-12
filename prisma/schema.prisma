@@ -296,12 +296,67 @@ enum OrderStatus {
   AWAITING_PAYMENT
   // The buyer has given an M-Pesa code. Nobody has checked it yet.
   PENDING_CONFIRMATION
-  // The owner matched it against her SMS. Items are SOLD.
+  // Paid, and the items sold.
   CONFIRMED
-  // The owner could not match it. Items returned to the rail.
+  // The payment didn't check out. Items returned to the rail.
   REJECTED
   // Abandoned, or every hold lapsed before payment.
   CANCELLED
+  // Paid, but the items had gone by the time the payment was settled: the
+  // shop owes the buyer their money back. See docs/payments.md.
+  NEEDS_REFUND
+  // The shop has sent the money back.
+  REFUNDED
+}
+
+// How a payment was made.
+enum PaymentChannel {
+  // The buyer paid the till or paybill themselves and typed the M-Pesa code.
+  MPESA_MANUAL
+}
+
+// Where a payment stands. Separate from the order's state: a payment can be
+// received for an order that then needs refunding.
+enum PaymentStatus {
+  // The buyer says they paid; nothing has verified it yet.
+  CLAIMED
+  // Verified: the money arrived.
+  RECEIVED
+  // It didn't check out.
+  REJECTED
+  // Received, then sent back.
+  REFUNDED
+}
+
+// A payment towards an order, however it was made. An order can have several:
+// a rejected claim and then a good one, or later, a cancelled STK prompt and
+// then a paid one. See docs/payments.md.
+model Payment {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  channel PaymentChannel
+  status  PaymentStatus
+
+  // What the order asked for when this payment was made, in cents.
+  amountCents Int
+  // The M-Pesa receipt, "UJ2LQ8HPVQ". Unique: one receipt pays for one order,
+  // however it was recorded.
+  receipt     String? @unique
+  // Who paid, canonical 2547XXXXXXXX, when known.
+  phone       String?
+
+  createdAt  DateTime  @default(now())
+  // When it was verified as received.
+  receivedAt DateTime?
+
+  // How the money went back, in the owner's words ("Reversed, code SFK...").
+  refundNote String?
+  refundedAt DateTime?
+
+  @@index([orderId, createdAt])
+  @@index([status])
 }
 
 model Order {
@@ -353,7 +408,8 @@ model Order {
   // Included in totalCents, which is what the buyer sends by M-Pesa.
   deliveryFeeCents Int         @default(0)
 
-  items OrderItem[]
+  items    OrderItem[]
+  payments Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

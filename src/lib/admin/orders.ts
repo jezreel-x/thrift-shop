@@ -1,8 +1,9 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { OrderStatus } from "@/generated/prisma/enums";
+import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
 import { normalisePhone } from "../phone";
 import { prisma } from "../prisma";
-import { confirmSaleIn, releaseHoldIn } from "../shop/reservations";
+import { settleItemsIn } from "../payments/settle";
+import { releaseHoldIn } from "../shop/reservations";
 import { recordAudit } from "./audit";
 
 /**
@@ -26,26 +27,27 @@ export type DecisionRefusal =
   /** No such order. */
   | "not-found"
   /** Somebody already confirmed or rejected it, or it was never claimed. */
-  | "already-decided"
-  /** At least one item's hold ran out; it may belong to somebody else now. */
-  | "hold-lapsed";
+  | "already-decided";
 
 export type DecisionResult =
-  { ok: true; reference: string } | { ok: false; reason: DecisionRefusal; titles?: string[] };
-
-/** Thrown inside a transaction to roll it back, carrying what went wrong. */
-class HoldLapsed extends Error {
-  constructor(readonly titles: string[]) {
-    super("hold lapsed");
-  }
-}
+  | {
+      ok: true;
+      reference: string;
+      /** Confirmed: sold. Needs refund: paid, but an item had gone. */
+      outcome: "confirmed" | "needs-refund" | "rejected";
+      /** What had gone, for "needs refund". */
+      missing?: string[];
+    }
+  | { ok: false; reason: DecisionRefusal };
 
 /**
- * Accepts the payment: every item on the order becomes SOLD.
+ * Accepts the payment, and settles the order (src/lib/payments/settle.ts).
  *
- * All or nothing. If any item's hold has run out, nothing is sold and the order
- * stays pending, because the lapsed item may already be in another buyer's
- * checkout — and confirming would sell one jacket twice.
+ * If the buyer's holds are live, or lapsed but the units are still free, every
+ * item is sold and the order is CONFIRMED. If any unit has gone to someone
+ * else, nothing is sold and the order moves to NEEDS_REFUND: the money arrived,
+ * so the shop owes it back. Either way the decision is made, recorded and
+ * shown, never refused: the buyer has paid.
  */
 export async function confirmOrder(input: {
   orderId: string;
@@ -54,47 +56,104 @@ export async function confirmOrder(input: {
 }): Promise<DecisionResult> {
   const note = input.note?.trim() || null;
 
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const now = new Date();
+  return prisma.$transaction(async (tx) => {
+    const now = new Date();
 
-      const claimed = await claimDecision(tx, input.orderId, {
-        status: OrderStatus.CONFIRMED,
-        reviewedAt: now,
-        reviewNote: note,
-      });
-      if (!claimed.ok) return claimed;
-
-      const lapsed: string[] = [];
-      for (const item of claimed.order.items) {
-        const sold = await confirmSaleIn(tx, {
-          variantId: item.variantId,
-          holder: claimed.order.userId,
-          quantity: item.quantity,
-          orderId: input.orderId,
-          now,
-        });
-        if (!sold) lapsed.push(item.title);
-      }
-      if (lapsed.length > 0) throw new HoldLapsed(lapsed);
-
-      await recordAudit(tx, {
-        actorId: input.actorId,
-        action: "order.confirm-payment",
-        entityType: "Order",
-        entityId: input.orderId,
-        before: { status: OrderStatus.PENDING_CONFIRMATION },
-        after: { status: OrderStatus.CONFIRMED, ...(note ? { note } : {}) },
-      });
-
-      return { ok: true as const, reference: claimed.order.reference };
+    const claimed = await claimDecision(tx, input.orderId, {
+      status: OrderStatus.CONFIRMED,
+      reviewedAt: now,
+      reviewNote: note,
     });
-  } catch (error) {
-    if (error instanceof HoldLapsed) {
-      return { ok: false, reason: "hold-lapsed", titles: error.titles };
+    if (!claimed.ok) return claimed;
+
+    const settled = await settleItemsIn(tx, {
+      orderId: input.orderId,
+      holder: claimed.order.userId,
+      items: claimed.order.items,
+      now,
+    });
+
+    if (!settled.sold) {
+      await tx.order.update({
+        where: { id: input.orderId },
+        data: { status: OrderStatus.NEEDS_REFUND },
+      });
+      // Whatever this buyer still held goes back: nothing of theirs is sold.
+      await tx.stockHold.deleteMany({
+        where: {
+          variantId: { in: claimed.order.items.map((item) => item.variantId) },
+          holder: claimed.order.userId,
+        },
+      });
     }
-    throw error;
-  }
+
+    await tx.payment.updateMany({
+      where: { orderId: input.orderId, status: PaymentStatus.CLAIMED },
+      data: { status: PaymentStatus.RECEIVED, receivedAt: now },
+    });
+
+    await recordAudit(tx, {
+      actorId: input.actorId,
+      action: "order.confirm-payment",
+      entityType: "Order",
+      entityId: input.orderId,
+      before: { status: OrderStatus.PENDING_CONFIRMATION },
+      after: settled.sold
+        ? { status: OrderStatus.CONFIRMED, ...(note ? { note } : {}) }
+        : { status: OrderStatus.NEEDS_REFUND, missing: settled.missing, ...(note ? { note } : {}) },
+    });
+
+    return settled.sold
+      ? { ok: true as const, reference: claimed.order.reference, outcome: "confirmed" as const }
+      : {
+          ok: true as const,
+          reference: claimed.order.reference,
+          outcome: "needs-refund" as const,
+          missing: settled.missing,
+        };
+  });
+}
+
+/**
+ * Records that the shop sent a buyer's money back, closing a NEEDS_REFUND
+ * order. The note says how ("Reversed on M-Pesa, code SFK…"), for the buyer's
+ * questions and the shop's books.
+ */
+export async function markRefunded(input: {
+  orderId: string;
+  actorId: string;
+  note: string;
+}): Promise<{ ok: true; reference: string } | { ok: false; reason: "not-found" | "not-owed" }> {
+  const note = input.note.trim();
+
+  return prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const { count } = await tx.order.updateMany({
+      where: { id: input.orderId, status: OrderStatus.NEEDS_REFUND },
+      data: { status: OrderStatus.REFUNDED },
+    });
+    const order = await tx.order.findUnique({
+      where: { id: input.orderId },
+      select: { reference: true },
+    });
+    if (!order) return { ok: false, reason: "not-found" };
+    if (count === 0) return { ok: false, reason: "not-owed" };
+
+    await tx.payment.updateMany({
+      where: { orderId: input.orderId, status: PaymentStatus.RECEIVED },
+      data: { status: PaymentStatus.REFUNDED, refundNote: note, refundedAt: now },
+    });
+    await recordAudit(tx, {
+      actorId: input.actorId,
+      action: "order.mark-refunded",
+      entityType: "Order",
+      entityId: input.orderId,
+      before: { status: OrderStatus.NEEDS_REFUND },
+      after: { status: OrderStatus.REFUNDED, note },
+    });
+
+    return { ok: true, reference: order.reference };
+  });
 }
 
 /**
@@ -129,6 +188,10 @@ export async function rejectOrder(input: {
         released += 1;
       }
     }
+    await tx.payment.updateMany({
+      where: { orderId: input.orderId, status: PaymentStatus.CLAIMED },
+      data: { status: PaymentStatus.REJECTED },
+    });
 
     await recordAudit(tx, {
       actorId: input.actorId,
@@ -139,7 +202,7 @@ export async function rejectOrder(input: {
       after: { status: OrderStatus.REJECTED, reason, itemsReturned: released },
     });
 
-    return { ok: true as const, reference: claimed.order.reference };
+    return { ok: true as const, reference: claimed.order.reference, outcome: "rejected" as const };
   });
 }
 
@@ -201,8 +264,9 @@ export async function listOrdersForReview(query: {
     ...searchCondition(query.search),
   };
 
+  // Both wait on staff, so the longest-waiting buyer comes first.
   const orderBy: Prisma.OrderOrderByWithRelationInput[] =
-    query.status === OrderStatus.PENDING_CONFIRMATION
+    query.status === OrderStatus.PENDING_CONFIRMATION || query.status === OrderStatus.NEEDS_REFUND
       ? [{ claimedAt: "asc" }, { createdAt: "asc" }]
       : [{ createdAt: "desc" }];
 
@@ -248,6 +312,13 @@ export function countOrdersToConfirm(): Promise<number> {
   return prisma.order.count({ where: { status: OrderStatus.PENDING_CONFIRMATION } });
 }
 
+/** Orders waiting on staff: payments to confirm, and money to send back. For the menu badge. */
+export function countOrdersNeedingStaff(): Promise<number> {
+  return prisma.order.count({
+    where: { status: { in: [OrderStatus.PENDING_CONFIRMATION, OrderStatus.NEEDS_REFUND] } },
+  });
+}
+
 /**
  * One order with everything a reviewer needs: what was bought, whether each
  * hold is still this buyer's, and who has done what to it.
@@ -257,6 +328,20 @@ export async function getOrderForReview(reference: string) {
     where: { reference: reference.toUpperCase() },
     include: {
       user: { select: { email: true } },
+      payments: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          amountCents: true,
+          receipt: true,
+          createdAt: true,
+          receivedAt: true,
+          refundNote: true,
+          refundedAt: true,
+        },
+      },
       items: {
         orderBy: { title: "asc" },
         include: {
@@ -303,7 +388,20 @@ export async function getOrderForReview(reference: string) {
     },
   });
 
-  return { ...order, items, history };
+  // What had sold, when a payment ended in a refund: kept on the decision's
+  // audit entry, the record of what the shop saw at that moment.
+  const settledShort = [...history]
+    .reverse()
+    .find((entry) => entry.action === "order.confirm-payment");
+  const missingRaw =
+    settledShort?.after && typeof settledShort.after === "object"
+      ? (settledShort.after as { missing?: unknown }).missing
+      : undefined;
+  const missing = Array.isArray(missingRaw)
+    ? missingRaw.filter((title): title is string => typeof title === "string")
+    : [];
+
+  return { ...order, items, history, missing };
 }
 
 /**

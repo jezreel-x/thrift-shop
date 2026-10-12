@@ -15,16 +15,7 @@ import {
  * hold ran out" — appears beside the button that caused it. Both are ordinary
  * forms and submit without JavaScript.
  */
-export function OrderDecision({
-  orderId,
-  total,
-  canConfirm,
-}: {
-  orderId: string;
-  total: string;
-  /** False when a hold has already run out: confirming is certain to fail, so it is not offered. */
-  canConfirm: boolean;
-}) {
+export function OrderDecision({ orderId, total }: { orderId: string; total: string }) {
   const [confirmState, confirmAction, confirming] = useActionState<DecisionFormState, FormData>(
     confirmOrderAction,
     {},
@@ -37,39 +28,37 @@ export function OrderDecision({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {canConfirm && (
-        <form
-          action={confirmAction}
-          className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5"
+      <form
+        action={confirmAction}
+        className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5"
+      >
+        <input type="hidden" name="orderId" value={orderId} />
+        <div>
+          <h3 className="font-medium">Payment arrived</h3>
+          <p className="mt-1 text-sm text-muted">
+            You found this payment of {total} in your own M-Pesa records. Every item is sold; if
+            anything sold out meanwhile, the order moves to Needs refund instead.
+          </p>
+        </div>
+        {confirmState.error && <Refusal message={confirmState.error} />}
+        <label htmlFor="note" className="text-sm font-medium">
+          Note <span className="font-normal text-muted">(optional, staff only)</span>
+        </label>
+        <input
+          id="note"
+          name="note"
+          maxLength={300}
+          placeholder="e.g. matched at 14:05"
+          className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-foreground focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="mt-auto rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-800 disabled:opacity-60"
         >
-          <input type="hidden" name="orderId" value={orderId} />
-          <div>
-            <h3 className="font-medium">Payment arrived</h3>
-            <p className="mt-1 text-sm text-muted">
-              You found this payment of {total} in your own M-Pesa records. Every item is marked
-              sold.
-            </p>
-          </div>
-          {confirmState.error && <Refusal message={confirmState.error} />}
-          <label htmlFor="note" className="text-sm font-medium">
-            Note <span className="font-normal text-muted">(optional, staff only)</span>
-          </label>
-          <input
-            id="note"
-            name="note"
-            maxLength={300}
-            placeholder="e.g. matched at 14:05"
-            className="rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-foreground focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="mt-auto rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-800 disabled:opacity-60"
-          >
-            {confirming ? "Confirming…" : "Confirm payment"}
-          </button>
-        </form>
-      )}
+          {confirming ? "Confirming…" : "Confirm payment"}
+        </button>
+      </form>
 
       <form
         action={rejectAction}

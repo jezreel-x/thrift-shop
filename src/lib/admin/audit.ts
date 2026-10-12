@@ -23,6 +23,7 @@ export type AuditAction =
   | "staff.delete-role"
   | "order.confirm-payment"
   | "order.reject-payment"
+  | "order.mark-refunded"
   | "settings.update-payment"
   | "settings.clear-payment"
   | "settings.update-whatsapp"

@@ -6,8 +6,10 @@ import { ContactForm } from "@/components/contact-form";
 import { DeliveryForm } from "@/components/delivery-form";
 import { OrderDelivery } from "@/components/order-delivery";
 import { PaymentClaimForm } from "@/components/payment-claim-form";
+import { WhileHeld } from "@/components/while-held";
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
+import { formatTime } from "@/lib/dates";
 import { readCartId } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
 import { formatPhone } from "@/lib/phone";
@@ -33,7 +35,8 @@ export const metadata: Metadata = {
  *
  * Loading this page is not passive: it reserves everything in the cart that can
  * still be held, which is the moment a shortlist becomes a claim. Re-entering
- * finds the same order and extends the same holds rather than opening a second.
+ * while held finds the same order and extends the same holds rather than
+ * opening a second; once the holds have run out, it starts a new order.
  */
 export default async function CheckoutPage({ searchParams }: PageProps<"/checkout">) {
   // The first point in the shop that requires an account: a reservation has to
@@ -114,13 +117,16 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
   if (!result.ok) redirect("/cart");
 
   const payment = await getPaymentDetails();
+  const heldUntil = formatTime(result.heldUntil);
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
       <h1 className="text-2xl font-semibold tracking-tight">Checkout</h1>
 
       <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-        Held for you for {RESERVATION_MINUTES} minutes. Order{" "}
+        Held for you until{" "}
+        <span className="font-medium text-neutral-900 dark:text-neutral-100">{heldUntil}</span> (
+        {RESERVATION_MINUTES} minutes). Order{" "}
         <span className="font-mono font-medium">{result.reference}</span>.
       </p>
 
@@ -146,29 +152,36 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
 
       <OrderSummary orderId={result.orderId} />
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold">Pay by M-Pesa</h2>
-
-        {payment ? (
-          <PaymentInstructions payment={payment} reference={result.reference} />
-        ) : (
-          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            Payment details have not been set up yet, so this order cannot be paid for online. Your
-            pieces stay held for {RESERVATION_MINUTES} minutes.
-          </p>
-        )}
-      </section>
-
-      {payment && (
+      {/* Keyed by the time, so checking out again starts a fresh countdown. */}
+      <WhileHeld
+        key={result.heldUntil.toISOString()}
+        until={result.heldUntil.toISOString()}
+        untilLabel={heldUntil}
+      >
         <section className="mt-10">
-          <h2 className="text-lg font-semibold">Then tell us</h2>
-          <p className="mt-2 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-            Paste the code from your M-Pesa message. We check it against the payment and confirm —
-            your pieces stay held while we do.
-          </p>
-          <PaymentClaimForm orderId={result.orderId} />
+          <h2 className="text-lg font-semibold">Pay by M-Pesa</h2>
+
+          {payment ? (
+            <PaymentInstructions payment={payment} reference={result.reference} />
+          ) : (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              Payment details have not been set up yet, so this order cannot be paid for online.
+              Your pieces stay held until {heldUntil}.
+            </p>
+          )}
         </section>
-      )}
+
+        {payment && (
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold">Then tell us</h2>
+            <p className="mt-2 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+              Paste the code from your M-Pesa message. We check it against the payment and confirm —
+              your pieces stay held while we do.
+            </p>
+            <PaymentClaimForm orderId={result.orderId} />
+          </section>
+        )}
+      </WhileHeld>
 
       <Link
         href="/cart"

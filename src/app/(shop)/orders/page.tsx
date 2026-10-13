@@ -49,7 +49,7 @@ export default async function OrdersPage() {
             >
               <div className="flex items-baseline justify-between gap-4">
                 <span className="font-mono font-medium">{order.reference}</span>
-                <OrderBadge status={order.status} />
+                <OrderBadge status={order.status} lapsed={order.lapsed} />
               </div>
               <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
                 {order.items.length} {order.items.length === 1 ? "piece" : "pieces"} ·{" "}

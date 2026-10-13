@@ -3,6 +3,7 @@ import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
 import { normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 import { settleItemsIn } from "../payments/settle";
+import { heldUntil } from "../shop/orders";
 import { releaseHoldIn } from "../shop/reservations";
 import { recordAudit } from "./audit";
 
@@ -286,13 +287,30 @@ export async function listOrdersForReview(query: {
         totalCents: true,
         createdAt: true,
         claimedAt: true,
-        items: { select: { title: true }, orderBy: { title: "asc" } },
+        userId: true,
+        items: {
+          select: { title: true, variantId: true, quantity: true },
+          orderBy: { title: "asc" },
+        },
       },
     }),
     prisma.order.count({ where }),
   ]);
 
-  return { orders, total, pageCount: Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE)) };
+  // Unpaid orders whose hold ran out can't be paid for any more: marked, so
+  // nobody waits on them. The daily housekeeping closes them.
+  const held = await heldUntil(
+    orders.filter((order) => order.status === OrderStatus.AWAITING_PAYMENT),
+  );
+
+  return {
+    orders: orders.map((order) => ({
+      ...order,
+      lapsed: order.status === OrderStatus.AWAITING_PAYMENT && !held.get(order.id),
+    })),
+    total,
+    pageCount: Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE)),
+  };
 }
 
 /** How many orders are in each state, for the tabs and the menu badge. */
@@ -401,7 +419,10 @@ export async function getOrderForReview(reference: string) {
     ? missingRaw.filter((title): title is string => typeof title === "string")
     : [];
 
-  return { ...order, items, history, missing };
+  const lapsed =
+    order.status === OrderStatus.AWAITING_PAYMENT && !(await heldUntil([order])).get(order.id);
+
+  return { ...order, items, history, missing, lapsed };
 }
 
 /**

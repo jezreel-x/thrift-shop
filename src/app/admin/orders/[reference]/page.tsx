@@ -57,7 +57,7 @@ export default async function AdminOrderPage({ params }: Props) {
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-2xl font-semibold tracking-tight">{order.reference}</h1>
-        <OrderStatusBadge status={order.status} />
+        <OrderStatusBadge status={order.status} lapsed={order.lapsed} />
       </div>
       <p className="mt-1 text-sm text-muted">Placed {formatDateTime(order.createdAt)}</p>
 

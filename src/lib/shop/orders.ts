@@ -51,8 +51,9 @@ export type CheckoutResult =
  *
  * Re-enterable: a buyer who refreshes, or who leaves and comes back inside the
  * window, finds the same order rather than a second one. Their own holds are
- * extended rather than contested, because `reserveVariant` treats the existing
- * holder as entitled.
+ * kept rather than contested, because `reserveVariant` treats the existing
+ * holder as entitled — and kept to their original deadline, so coming back
+ * never buys more time.
  *
  * Only inside the window. An order whose holds ran out is closed first, and
  * coming back after that starts a new order: reviving the old one would carry

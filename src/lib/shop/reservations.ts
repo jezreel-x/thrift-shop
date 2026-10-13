@@ -71,6 +71,12 @@ export type ReservationResult =
  * Holds fewer when fewer are free, and says how many — checkout tells the buyer
  * before they pay. A buyer reserving again replaces their own hold rather than
  * competing with it, so refreshing checkout never loses them their place.
+ *
+ * Nor does it buy them more time. While their hold is live it keeps its
+ * deadline, so a hold due at 17:30 is still due at 17:30 after a refresh at
+ * 17:27. Otherwise refreshing every fourteen minutes would keep the last unit
+ * off sale for as long as somebody cared to, without paying. Once it has run
+ * out, reserving again starts a new window, if the units are still free.
  */
 export async function reserveVariant(
   variantId: string,
@@ -78,7 +84,7 @@ export async function reserveVariant(
   quantity = 1,
   now: Date = new Date(),
 ): Promise<ReservationResult> {
-  const reservedUntil = new Date(now.getTime() + RESERVATION_MINUTES * MS_PER_MINUTE);
+  const fresh = new Date(now.getTime() + RESERVATION_MINUTES * MS_PER_MINUTE);
 
   return prisma.$transaction(async (tx) => {
     // The lock. Everything after this line sees what earlier reservers of this
@@ -101,6 +107,13 @@ export async function reserveVariant(
     if (free <= 0) return { ok: false, reason: "held" };
 
     const take = Math.min(Math.max(1, Math.trunc(quantity)), free);
+
+    // Read under the lock, so the deadline kept is the one that was live.
+    const own = await tx.stockHold.findUnique({
+      where: { variantId_holder: { variantId, holder } },
+      select: { expiresAt: true },
+    });
+    const reservedUntil = own && own.expiresAt > now ? own.expiresAt : fresh;
 
     await tx.stockHold.upsert({
       where: { variantId_holder: { variantId, holder } },

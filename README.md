@@ -13,10 +13,11 @@ may get it. Most of the design below follows from that.
 **Live:** https://thrift-shop-pi.vercel.app ·
 **Health:** [`/api/health`](https://thrift-shop-pi.vercel.app/api/health)
 
-> **Status:** catalogue, accounts, cart, checkout with reservation and manual M-Pesa confirmation are
-> live, and so is most of the admin area: staff roles and permissions, the order queue, payment
-> settings, and product management (stock grid, photos, sold elsewhere, WhatsApp holds). Delivery at
-> checkout, demo mode and fulfilment tracking are next — see the [roadmap](#roadmap).
+> **Status:** catalogue, accounts, cart, checkout with reservation, pickup or delivery, and manual
+> M-Pesa confirmation are live, and so is the admin area: the order queue with refunds, product
+> management (stock grid, photos, sold elsewhere, WhatsApp holds), the customer register, staff and
+> roles, and settings. M-Pesa STK Push is next, then fulfilment tracking — see the
+> [roadmap](#roadmap).
 >
 > The deployed catalogue uses **placeholder photography**, so the pages and `robots.txt` carry
 > `noindex`. Real photos replace it before anything is indexed.
@@ -38,7 +39,8 @@ may get it. Most of the design below follows from that.
 **For the shop**
 
 - **Order queue.** Find each claimed payment in your own M-Pesa records, then confirm or reject it.
-  Each decision is one transaction: every item sold, or none.
+  Each decision is one transaction: every item sold, or none. A payment that can't be filled goes
+  to **Needs refund**, and is closed with the refund's M-Pesa code.
 - **Products.** A colour × size stock grid with prices at three levels (base, a whole size or colour,
   one cell); photos shrunk in the browser and tagged by colour.
 - **Stock page.** Sold elsewhere, Hold for a WhatsApp buyer (then sold or released), Share to
@@ -130,6 +132,15 @@ read-then-write, 20 simultaneous buyers all got the one jacket; with the lock, o
 [docs/one-of-one-stock.md](docs/one-of-one-stock.md) and
 [docs/product-variants.md](docs/product-variants.md).
 
+### A hold that runs out ends the chance to pay
+
+The hold protects the units; an unpaid order lives only as long as it. Checkout shows when the hold
+ends, and a tab left open past that hides the till, so nobody sends money from a stale page. After
+that the order says "Hold ran out" to the buyer and to staff, a code sent for it is refused, and
+checking out again starts a new order rather than reviving the old one. A daily job closes unpaid
+orders whose hold ran out over a day ago. Whether an order is still held is read from the holds
+themselves, never worked out from its dates, so it cannot disagree with the stock count.
+
 ### The owner's edits never undo a sale
 
 The stock grid is edited while sales keep happening. Each cell sends the count it was showing; on
@@ -155,8 +166,8 @@ a 404, not a 403, and page titles are withheld from them too.
 Moving from one-of-one items to colour × size variants, and from a fixed category enum to categories
 the owner manages, followed **expand → backfill → switch → contract**: add the new tables and
 columns, fill them from the old ones, move the code over, and only then drop the old columns. Every
-step deploys on its own, and production is checked with row counts after each. The contract step is
-still to come.
+step deploys on its own and production is checked with row counts after each. The old data was
+exported before the contract step dropped it.
 
 Migrations are developed against a seeded local database, never production: an empty database is
 where a bad migration looks fine. Vercel applies pending migrations during its build, so code can
@@ -181,8 +192,22 @@ cent rather than rounding it, so a typo fails at the form instead of becoming a 
 The buyer pays to a till and submits the M-Pesa code. The code is unique across all orders, so it
 cannot be spent twice. Staff confirm it **against their own M-Pesa records, never a screenshot**,
 and the hold is extended while they do. Checkout tells the buyer the name M-Pesa will show and to
-stop if it shows another. Automatic confirmation through Daraja is designed in
-[docs/mpesa-stk-push.md](docs/mpesa-stk-push.md) and needs a real paybill.
+stop if it shows another.
+
+### Late money is settled by one rule
+
+Money can arrive after the hold: a claim nobody checked overnight now, a slow STK callback or a
+card payment later. Every way of being paid ends in the same function, under the same row locks as
+checkout:
+
+- the units are still the buyer's, or free → sell them, **Confirmed**;
+- any unit has gone to someone else → sell nothing, **Needs refund**, then **Refunded** with the
+  refund's code shown to the buyer.
+
+Each payment is its own record (channel, amount, receipt), with the receipt unique across the shop.
+A test races a late confirmation against a new buyer for the last unit and fails if both get it.
+M-Pesa STK Push, cards through an aggregator and per-shop go-live follow; see
+[docs/payments.md](docs/payments.md) and [docs/mpesa-stk-push.md](docs/mpesa-stk-push.md).
 
 ### Sessions are rows, not signed tokens
 
@@ -224,9 +249,11 @@ for when Actions is available.
   - Delivery at checkout: pickup, or delivery to an area for its fee ✅
   - The contract migration, the customer register, and a staff and roles screen ✅
   - Shop rules (the per-item limit) and settings pages ✅
-  - **Payments** ← _next_: the buyer chooses how to pay; M-Pesa STK Push, verified
-    till payments and later cards, all settled by one rule. See
-    [docs/payments.md](docs/payments.md)
+  - **Payments**, all settled by one rule. See [docs/payments.md](docs/payments.md)
+    - Settling late payments, Needs refund and Refunded, a record per payment ✅
+    - Unpaid orders end when their hold does ✅
+    - M-Pesa STK Push, with the buyer choosing how to pay ← _next_
+    - Verified till payments, cards through an aggregator, go-live per shop
   - Fulfilment: order status to the door, a delivery code, pay on delivery
   - Demo mode
 - **Phase 4 — Operations.** Notifications, reports and analytics, CSV export.

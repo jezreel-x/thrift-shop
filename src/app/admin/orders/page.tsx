@@ -122,7 +122,11 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                       </span>
                       <span className="mt-2 flex items-baseline justify-between gap-3">
                         <span className="font-mono text-sm tracking-wider">
-                          {order.mpesaCode ?? <span className="text-muted">No code yet</span>}
+                          {order.mpesaCode ?? (
+                            <span className="text-muted">
+                              {order.lapsed ? "Hold ran out" : "No code yet"}
+                            </span>
+                          )}
                         </span>
                         <span className="font-medium tabular-nums">
                           {formatPrice(order.totalCents)}
@@ -202,7 +206,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                         {order.mpesaCode ?? <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <OrderStatusBadge status={order.status} />
+                        <OrderStatusBadge status={order.status} lapsed={order.lapsed} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link

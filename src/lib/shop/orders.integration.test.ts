@@ -5,7 +5,13 @@ import { hashPassword } from "@/lib/auth/password";
 import { makeProduct as makeTestProduct } from "@/test/catalogue";
 import { cleanDatabaseBetweenTests, db } from "@/test/db";
 import { addToCart, resolveCart } from "./cart";
-import { beginCheckout, claimPayment, getOrder, listOrdersBeingChecked } from "./orders";
+import {
+  beginCheckout,
+  cancelLapsedCheckouts,
+  claimPayment,
+  getOrder,
+  listOrdersBeingChecked,
+} from "./orders";
 import { releaseExpiredReservations, reserveVariant } from "./reservations";
 
 cleanDatabaseBetweenTests();
@@ -30,6 +36,14 @@ async function shopperWith(products: { variantId: string }[], email = "grace@exa
   for (const product of products) await addToCart(cart.id, product.variantId);
 
   return { user, cartId: cart.id };
+}
+
+/** Every hold of this buyer's ran out a moment ago. */
+async function expireHolds(holder: string) {
+  await db.stockHold.updateMany({
+    where: { holder },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
 }
 
 describe("beginCheckout", () => {
@@ -119,6 +133,53 @@ describe("beginCheckout", () => {
 
     expect(first.ok && second.ok && first.reference === second.reference).toBe(true);
     expect(await db.order.count({ where: { userId: user.id } })).toBe(1);
+  });
+
+  it("says when the holds run out", async () => {
+    const { user, cartId } = await shopperWith([await makeProduct()]);
+    const before = Date.now();
+
+    const result = await beginCheckout(user.id, cartId, BUYER);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const minutes = (result.heldUntil.getTime() - before) / 60_000;
+    expect(minutes).toBeGreaterThan(14.9);
+    expect(minutes).toBeLessThan(15.1);
+  });
+
+  it("starts a new order once the old one's holds ran out, and closes the old one", async () => {
+    // The order from last week must not come back to life with today's cart:
+    // same reference, last week's date, and a total nobody agreed to then.
+    const { user, cartId } = await shopperWith([await makeProduct()]);
+    const first = await beginCheckout(user.id, cartId, BUYER);
+    await expireHolds(user.id);
+
+    const second = await beginCheckout(user.id, cartId, BUYER);
+
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.reference).not.toBe(first.reference);
+    const old = await db.order.findUniqueOrThrow({ where: { id: first.orderId } });
+    expect(old.status).toBe(OrderStatus.CANCELLED);
+    const fresh = await db.order.findUniqueOrThrow({ where: { id: second.orderId } });
+    expect(fresh.status).toBe(OrderStatus.AWAITING_PAYMENT);
+  });
+
+  it("closes the lapsed order even when the cart has since been emptied", async () => {
+    const product = await makeProduct();
+    const { user, cartId } = await shopperWith([product]);
+    const first = await beginCheckout(user.id, cartId, BUYER);
+    if (!first.ok) throw new Error("setup");
+    await expireHolds(user.id);
+    await db.cartItem.deleteMany({ where: { cartId } });
+
+    expect(await beginCheckout(user.id, cartId, BUYER)).toEqual({
+      ok: false,
+      reason: "empty-cart",
+    });
+    const old = await db.order.findUniqueOrThrow({ where: { id: first.orderId } });
+    expect(old.status).toBe(OrderStatus.CANCELLED);
   });
 
   it("rebuilds the lines when availability changed between visits", async () => {
@@ -262,6 +323,37 @@ describe("claimPayment", () => {
       reason: "hold-lapsed",
     });
   });
+
+  it("extends nothing when one line's hold has lapsed", async () => {
+    // Otherwise the lines still held would stay out of the shop for a day, on
+    // an order that can't be paid for.
+    const [live, lapsing, alsoLive] = [
+      await makeProduct(),
+      await makeProduct(),
+      await makeProduct(),
+    ];
+    // The lapsed line in the middle, so extending line by line would reach a
+    // live one before it, whichever way the lines are ordered.
+    const { user, cartId } = await shopperWith([live, lapsing, alsoLive]);
+    const result = await beginCheckout(user.id, cartId, BUYER);
+    if (!result.ok) throw new Error("setup");
+    await db.stockHold.updateMany({
+      where: { variantId: lapsing.variantId },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    expect(await claimPayment(result.orderId, user.id, "SGH7XKL2M9")).toEqual({
+      ok: false,
+      reason: "hold-lapsed",
+    });
+    // Still checkout's fifteen minutes, not the day a claimed payment gets.
+    for (const { variantId } of [live, alsoLive]) {
+      const hold = await db.stockHold.findUniqueOrThrow({
+        where: { variantId_holder: { variantId, holder: user.id } },
+      });
+      expect(hold.expiresAt.getTime()).toBeLessThan(Date.now() + 20 * 60_000);
+    }
+  });
 });
 
 describe("getOrder", () => {
@@ -284,6 +376,56 @@ describe("getOrder", () => {
     const stranger = await makeUser("brian@example.com");
 
     expect(await getOrder(result.reference, stranger.id)).toBeNull();
+  });
+
+  it("says until when an unpaid order is held, and nothing once it isn't", async () => {
+    const { user, cartId } = await shopperWith([await makeProduct()]);
+    const result = await beginCheckout(user.id, cartId, BUYER);
+    if (!result.ok) throw new Error("setup");
+
+    expect((await getOrder(result.reference, user.id))?.heldUntil).toEqual(result.heldUntil);
+
+    await expireHolds(user.id);
+    expect((await getOrder(result.reference, user.id))?.heldUntil).toBeNull();
+  });
+});
+
+describe("cancelLapsedCheckouts", () => {
+  const DAY = 24 * 3_600_000;
+
+  async function checkedOut(email: string, daysAgo: number) {
+    const { user, cartId } = await shopperWith([await makeProduct()], email);
+    const result = await beginCheckout(user.id, cartId, BUYER);
+    if (!result.ok) throw new Error("setup");
+    await db.$executeRaw`
+      UPDATE "Order" SET "updatedAt" = now() - make_interval(days => ${daysAgo})
+       WHERE id = ${result.orderId}`;
+
+    return { user, orderId: result.orderId };
+  }
+
+  it("closes only unpaid orders whose hold ran out over a day ago", async () => {
+    const old = await checkedOut("old@example.com", 2);
+    await expireHolds(old.user.id);
+    // Ran out, but recently: the buyer's page says so for a while first.
+    const recent = await checkedOut("recent@example.com", 0);
+    await expireHolds(recent.user.id);
+    // Old, but still held: not lapsed.
+    const held = await checkedOut("held@example.com", 2);
+    // Paid, waiting on staff: never touched, whatever its holds say.
+    const claimed = await checkedOut("claimed@example.com", 2);
+    await claimPayment(claimed.orderId, claimed.user.id, "SGH7XKL2M9");
+    await expireHolds(claimed.user.id);
+
+    const now = new Date();
+    expect(await cancelLapsedCheckouts(new Date(now.getTime() - DAY), now)).toBe(1);
+
+    const status = async (orderId: string) =>
+      (await db.order.findUniqueOrThrow({ where: { id: orderId } })).status;
+    expect(await status(old.orderId)).toBe(OrderStatus.CANCELLED);
+    expect(await status(recent.orderId)).toBe(OrderStatus.AWAITING_PAYMENT);
+    expect(await status(held.orderId)).toBe(OrderStatus.AWAITING_PAYMENT);
+    expect(await status(claimed.orderId)).toBe(OrderStatus.PENDING_CONFIRMATION);
   });
 });
 

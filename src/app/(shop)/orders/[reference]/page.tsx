@@ -7,6 +7,7 @@ import { OrderBadge } from "@/components/order-badge";
 import { OrderStatus } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { OrderDelivery } from "@/components/order-delivery";
+import { formatTime } from "@/lib/dates";
 import { formatPrice } from "@/lib/money";
 import { getOrder } from "@/lib/shop/orders";
 
@@ -40,7 +41,10 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
 
       <div className="mt-6 flex items-baseline justify-between gap-4">
         <h1 className="font-mono text-2xl font-semibold tracking-tight">{order.reference}</h1>
-        <OrderBadge status={order.status} />
+        <OrderBadge
+          status={order.status}
+          lapsed={order.status === OrderStatus.AWAITING_PAYMENT && !order.heldUntil}
+        />
       </div>
 
       <StatusExplanation order={order} />
@@ -119,21 +123,25 @@ function StatusExplanation({
     status: OrderStatus;
     reviewNote: string | null;
     reference: string;
+    heldUntil: Date | null;
     payments: { refundNote: string | null }[];
   };
 }) {
+  if (order.status === OrderStatus.AWAITING_PAYMENT) return <Unpaid heldUntil={order.heldUntil} />;
+
   const message = {
-    [OrderStatus.AWAITING_PAYMENT]:
-      "Your pieces are held. Pay by M-Pesa and send us the confirmation code to finish.",
     [OrderStatus.PENDING_CONFIRMATION]:
       "We have your code and are checking it against the payment. Your pieces stay held until we do — usually within a day.",
     [OrderStatus.CONFIRMED]:
       "Paid and confirmed. We will be in touch about collection or delivery.",
     [OrderStatus.REJECTED]:
       "We could not match that payment, so the pieces have gone back on the rail.",
-    [OrderStatus.CANCELLED]: "This order was cancelled and nothing was charged.",
+    [OrderStatus.CANCELLED]:
+      "Your hold ran out before this order was paid for, so we closed it. Nothing was charged.",
     [OrderStatus.NEEDS_REFUND]: `Your payment arrived, but some of your pieces sold before it was confirmed, so we can't fill this order. We'll send the full amount back to your M-Pesa. If you haven't heard from us within a day, message us quoting ${order.reference}.`,
     [OrderStatus.REFUNDED]: "We've sent your payment back.",
+    // Handled above, by Unpaid.
+    [OrderStatus.AWAITING_PAYMENT]: "",
   }[order.status];
   const refund = order.payments.find((payment) => payment.refundNote)?.refundNote;
 
@@ -146,6 +154,41 @@ function StatusExplanation({
       {refund && order.status === OrderStatus.REFUNDED && (
         <p className="mt-2 text-neutral-500 dark:text-neutral-500">{refund}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Not paid yet: either still held, with the time it runs out, or not.
+ *
+ * Once the hold has run out the pieces are back on sale, and a code sent for
+ * this order would be refused. So the page says so before anyone pays, and
+ * offers the way forward: checkout again, which holds whatever is still free.
+ */
+function Unpaid({ heldUntil }: { heldUntil: Date | null }) {
+  return (
+    <div className="mt-4 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
+      {heldUntil ? (
+        <p>
+          Your pieces are held until{" "}
+          <span className="font-medium text-neutral-900 dark:text-neutral-100">
+            {formatTime(heldUntil)}
+          </span>
+          . Pay by M-Pesa and send us the confirmation code at checkout to finish.
+        </p>
+      ) : (
+        <p>
+          Your hold ran out before this order was paid for, so these pieces went back on sale.
+          Nothing was charged. Don&rsquo;t pay for this order: check out again, and we&rsquo;ll hold
+          whatever is still free.
+        </p>
+      )}
+      <Link
+        href="/checkout"
+        className="mt-4 inline-block rounded-lg bg-neutral-900 px-4 py-2 font-medium text-white transition hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+      >
+        {heldUntil ? "Back to checkout" : "Check out again"}
+      </Link>
     </div>
   );
 }

@@ -34,8 +34,12 @@ export type CustomerRow = {
 };
 
 const CONFIRMED: Prisma.OrderWhereInput = { status: OrderStatus.CONFIRMED };
-/** Got as far as a payment claim: everything except an unpaid checkout. */
-const PLACED: Prisma.OrderWhereInput = { status: { not: OrderStatus.AWAITING_PAYMENT } };
+/**
+ * Got as far as a payment claim. Unpaid checkouts aren't orders placed, and
+ * neither are the ones closed because their hold ran out (CANCELLED).
+ */
+const UNPLACED: OrderStatus[] = [OrderStatus.AWAITING_PAYMENT, OrderStatus.CANCELLED];
+const PLACED: Prisma.OrderWhereInput = { status: { notIn: UNPLACED } };
 
 export async function listCustomers(input: {
   search: string;
@@ -248,7 +252,7 @@ export async function getCustomer(id: string): Promise<CustomerDetail | null> {
   if (!user) return null;
 
   const confirmed = user.orders.filter((order) => order.status === OrderStatus.CONFIRMED);
-  const placed = user.orders.filter((order) => order.status !== OrderStatus.AWAITING_PAYMENT);
+  const placed = user.orders.filter((order) => !UNPLACED.includes(order.status));
 
   return {
     id: user.id,

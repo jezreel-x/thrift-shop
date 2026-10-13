@@ -29,6 +29,18 @@ export function formatDateTime(date: Date): string {
   return dateTime.format(date);
 }
 
+const timeOnly = new Intl.DateTimeFormat("en-KE", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** "14:05" */
+export function formatTime(date: Date): string {
+  return timeOnly.format(date);
+}
+
 /** "30 Sept 2026" */
 export function formatDate(date: Date): string {
   return dateOnly.format(date);

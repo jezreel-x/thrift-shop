@@ -104,6 +104,33 @@ Submitting a payment claim therefore **converts** the hold rather than ending it
 same mechanism, longer window. Deliberately not a second status, so the sweep,
 the catalogue query and checkout all keep working unchanged.
 
+## When a hold runs out before payment
+
+The hold protects the units; the order needs its own answer. An unpaid order
+whose holds have run out can no longer be paid for, and everything says so:
+
+- **Checkout** shows when the hold ends ("Held for you until 16:24"). A tab
+  left open past that swaps the till and the code form for "Your hold ran out",
+  so nobody sends money from a stale page.
+- **The buyer's order page** says the pieces went back on sale and nothing was
+  charged, and offers **Check out again**.
+- **Sending a code** is refused unless every line is still held. It checks the
+  whole order before extending anything.
+- **Checking out again** reuses the order only while it is still held (a
+  refresh, or coming back within the fifteen minutes). After that the old order
+  is closed as `CANCELLED` and a new one starts, with a new reference and
+  today's date.
+- **Staff** see "Hold ran out" in the queue instead of "Awaiting payment".
+- **The daily housekeeping** closes unpaid orders whose holds ran out over a
+  day ago, so the Awaiting payment tab only lists orders that can still be paid.
+
+Whether an order is still held is read from the holds themselves
+(`heldUntil` in `src/lib/shop/orders.ts`), never worked out from the order's
+dates, so it cannot disagree with what checkout and the stock count see. A
+payment that does arrive late, which only happens once a code has been sent or
+an automatic payment has started, is settled by the rule in
+[payments.md](payments.md).
+
 ## The sweep is housekeeping, not correctness
 
 `releaseExpiredReservations()` returns lapsed holds to the catalogue. It is worth

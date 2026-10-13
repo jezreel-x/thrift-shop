@@ -7,9 +7,12 @@ import { OrderStatus } from "@/generated/prisma/enums";
  * read their M-Pesa messages. Dressing that up as "processing" would imply a
  * machine is working on it, and set the wrong expectation about how long it
  * takes.
+ *
+ * `lapsed`: unpaid, and the hold ran out, so it can no longer be paid for.
  */
-export function OrderBadge({ status }: { status: OrderStatus }) {
-  const { label, className } = ORDER_BADGES[status];
+export function OrderBadge({ status, lapsed = false }: { status: OrderStatus; lapsed?: boolean }) {
+  const { label, className } =
+    lapsed && status === OrderStatus.AWAITING_PAYMENT ? HOLD_RAN_OUT : ORDER_BADGES[status];
 
   return (
     <span
@@ -19,6 +22,11 @@ export function OrderBadge({ status }: { status: OrderStatus }) {
     </span>
   );
 }
+
+const HOLD_RAN_OUT = {
+  label: "Hold ran out",
+  className: "bg-neutral-300 text-neutral-800 dark:bg-neutral-700 dark:text-neutral-200",
+};
 
 const ORDER_BADGES: Record<OrderStatus, { label: string; className: string }> = {
   [OrderStatus.AWAITING_PAYMENT]: {

@@ -36,6 +36,8 @@ export type CheckoutResult =
       droppedTitles: string[];
       /** Lines held in part, because fewer were free than were asked for. */
       reduced: { title: string; requested: number; held: number }[];
+      /** When the holds run out, and with them the chance to pay for this order. */
+      heldUntil: Date;
     }
   | { ok: false; reason: CheckoutRefusal };
 
@@ -49,8 +51,12 @@ export type CheckoutResult =
  *
  * Re-enterable: a buyer who refreshes, or who leaves and comes back inside the
  * window, finds the same order rather than a second one. Their own holds are
- * extended rather than contested, because `reserveProduct` treats the existing
+ * extended rather than contested, because `reserveVariant` treats the existing
  * holder as entitled.
+ *
+ * Only inside the window. An order whose holds ran out is closed first, and
+ * coming back after that starts a new order: reviving the old one would carry
+ * its reference and its date into a checkout days later.
  */
 export async function beginCheckout(
   userId: string,
@@ -59,6 +65,8 @@ export async function beginCheckout(
   /** Null while the shop offers no choice: arranged with the buyer, as before. */
   delivery: DeliveryChoice | null = null,
 ): Promise<CheckoutResult> {
+  await cancelLapsedCheckout(userId);
+
   const cart = await getCartContents(cartId, userId);
 
   if (cart.lines.length === 0) return { ok: false, reason: "empty-cart" };
@@ -69,6 +77,7 @@ export async function beginCheckout(
   const held: (CartLine & { quantity: number })[] = [];
   const dropped: CartLine[] = [];
   const reduced: { title: string; requested: number; held: number }[] = [];
+  let until: Date | null = null;
 
   for (const line of cart.lines) {
     const result = await reserveVariant(line.variantId, userId, line.quantity);
@@ -78,12 +87,13 @@ export async function beginCheckout(
     }
 
     held.push({ ...line, quantity: result.quantity });
+    if (!until || result.reservedUntil < until) until = result.reservedUntil;
     if (result.quantity < line.quantity) {
       reduced.push({ title: line.title, requested: line.quantity, held: result.quantity });
     }
   }
 
-  if (held.length === 0) {
+  if (held.length === 0 || !until) {
     return { ok: false, reason: "nothing-available" };
   }
 
@@ -138,7 +148,111 @@ export async function beginCheckout(
     reference: order.reference,
     droppedTitles: dropped.map((line) => line.title),
     reduced,
+    heldUntil: until,
   };
+}
+
+type UnpaidOrder = {
+  id: string;
+  userId: string;
+  items: { variantId: string; quantity: number }[];
+};
+
+const UNPAID_ORDER = {
+  id: true,
+  userId: true,
+  items: { select: { variantId: true, quantity: true } },
+} as const;
+
+/**
+ * When each unpaid order's holds run out: the earliest of its buyer's live
+ * holds on its lines. Null once any line is no longer held, which is the moment
+ * the order stops being payable — a code sent after that is refused, and the
+ * buyer is told to check out again.
+ *
+ * Read from the holds themselves, not worked out from the order's dates, so it
+ * can never disagree with what checkout and the stock count see.
+ */
+export async function heldUntil(
+  orders: UnpaidOrder[],
+  now: Date = new Date(),
+): Promise<Map<string, Date | null>> {
+  const holds =
+    orders.length === 0
+      ? []
+      : await prisma.stockHold.findMany({
+          where: {
+            expiresAt: { gt: now },
+            OR: orders.map((order) => ({
+              holder: order.userId,
+              variantId: { in: order.items.map((item) => item.variantId) },
+            })),
+          },
+          select: { holder: true, variantId: true, quantity: true, expiresAt: true },
+        });
+  const holdOf = new Map(holds.map((hold) => [`${hold.holder} ${hold.variantId}`, hold]));
+
+  return new Map(
+    orders.map((order) => {
+      let until: Date | null = null;
+      for (const item of order.items) {
+        const hold = holdOf.get(`${order.userId} ${item.variantId}`);
+        if (!hold || hold.quantity < item.quantity) return [order.id, null];
+        if (!until || hold.expiresAt < until) until = hold.expiresAt;
+      }
+
+      return [order.id, until];
+    }),
+  );
+}
+
+/**
+ * Closes the buyer's unpaid order if its holds have run out, so their next
+ * checkout starts a new one. Nothing was paid, so nothing is owed: CANCELLED.
+ */
+async function cancelLapsedCheckout(userId: string, now: Date = new Date()): Promise<void> {
+  const open = await prisma.order.findFirst({
+    where: { userId, status: OrderStatus.AWAITING_PAYMENT },
+    select: UNPAID_ORDER,
+  });
+  if (!open || (await heldUntil([open], now)).get(open.id)) return;
+
+  await prisma.order.updateMany({
+    where: { id: open.id, status: OrderStatus.AWAITING_PAYMENT },
+    data: { status: OrderStatus.CANCELLED },
+  });
+}
+
+/**
+ * Closes unpaid orders whose holds ran out, for the daily housekeeping.
+ *
+ * Only those last checked out before `cutoff` (a day ago, from housekeeping), so
+ * the buyer's page says "your hold ran out" for a while before it says
+ * "cancelled". The cutoff is checked again in the update itself: a buyer who
+ * checks out again while this runs bumps the order's `updatedAt`, and keeps it.
+ *
+ * Orders with a payment claimed are never touched. Those wait on staff, and
+ * whatever was paid is settled by the one rule in payments/settle.ts.
+ */
+export async function cancelLapsedCheckouts(cutoff: Date, now: Date = new Date()): Promise<number> {
+  const stale = await prisma.order.findMany({
+    where: { status: OrderStatus.AWAITING_PAYMENT, updatedAt: { lt: cutoff } },
+    select: UNPAID_ORDER,
+  });
+  const held = await heldUntil(stale, now);
+  const lapsed = stale.filter((order) => !held.get(order.id)).map((order) => order.id);
+  if (lapsed.length === 0) return 0;
+
+  const { count } = await prisma.order.updateMany({
+    where: {
+      id: { in: lapsed },
+      status: OrderStatus.AWAITING_PAYMENT,
+      updatedAt: { lt: cutoff },
+    },
+    data: { status: OrderStatus.CANCELLED },
+  });
+
+  return count;
 }
 
 export type ClaimRefusal = "not-found" | "already-claimed" | "code-already-used" | "hold-lapsed";
@@ -161,12 +275,11 @@ export async function claimPayment(
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
     select: {
-      id: true,
+      ...UNPAID_ORDER,
       reference: true,
       status: true,
       totalCents: true,
       buyerPhone: true,
-      items: { select: { variantId: true } },
     },
   });
 
@@ -174,6 +287,10 @@ export async function claimPayment(
   if (order.status !== OrderStatus.AWAITING_PAYMENT) {
     return { ok: false, reason: "already-claimed" };
   }
+
+  // The whole order first, so a hold that ran out on one line doesn't leave
+  // the others extended for a day on an order that can't be paid.
+  if (!(await heldUntil([order])).get(order.id)) return { ok: false, reason: "hold-lapsed" };
 
   // Extend every hold before recording the claim. Money has changed hands as far
   // as the buyer is concerned, and fifteen minutes is nowhere near long enough
@@ -212,9 +329,12 @@ export async function claimPayment(
   return { ok: true, reference: order.reference };
 }
 
-/** One order, scoped to its buyer so a reference cannot be guessed into. */
+/**
+ * One order, scoped to its buyer so a reference cannot be guessed into.
+ * `heldUntil` is set only while it is unpaid and still held.
+ */
 export async function getOrder(reference: string, userId: string) {
-  return prisma.order.findFirst({
+  const order = await prisma.order.findFirst({
     where: { reference, userId },
     include: {
       payments: { select: { refundNote: true } },
@@ -225,6 +345,14 @@ export async function getOrder(reference: string, userId: string) {
       },
     },
   });
+  if (!order) return null;
+
+  const held =
+    order.status === OrderStatus.AWAITING_PAYMENT
+      ? ((await heldUntil([order])).get(order.id) ?? null)
+      : null;
+
+  return { ...order, heldUntil: held };
 }
 
 /**
@@ -241,13 +369,21 @@ export async function listOrdersBeingChecked(userId: string) {
   });
 }
 
-/** A buyer's orders, newest first. */
+/** A buyer's orders, newest first, each unpaid one marked if its hold ran out. */
 export async function listOrders(userId: string) {
-  return prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    include: { items: { select: { title: true, priceCents: true } } },
+    include: { items: { select: { title: true, variantId: true, quantity: true } } },
   });
+  const held = await heldUntil(
+    orders.filter((order) => order.status === OrderStatus.AWAITING_PAYMENT),
+  );
+
+  return orders.map((order) => ({
+    ...order,
+    lapsed: order.status === OrderStatus.AWAITING_PAYMENT && !held.get(order.id),
+  }));
 }
 
 /**

@@ -38,8 +38,19 @@ const BADGES: Record<OrderStatus, { label: string; className: string }> = {
   },
 };
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
-  const { label, className } = BADGES[status];
+/** Unpaid, and the buyer's hold ran out: nothing to wait for. */
+const HOLD_RAN_OUT = { label: "Hold ran out", className: "bg-surface-muted text-muted" };
+
+export function OrderStatusBadge({
+  status,
+  lapsed = false,
+}: {
+  status: OrderStatus;
+  /** Unpaid, and the hold ran out. */
+  lapsed?: boolean;
+}) {
+  const { label, className } =
+    lapsed && status === OrderStatus.AWAITING_PAYMENT ? HOLD_RAN_OUT : BADGES[status];
 
   return (
     <span

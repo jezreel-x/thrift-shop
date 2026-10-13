@@ -137,7 +137,7 @@ describe("reserveVariant", () => {
     expect((await reserveVariant(variantId, "second")).ok).toBe(true);
   });
 
-  it("lets the same buyer extend their own hold, so a page refresh does not lose it", async () => {
+  it("lets the same buyer reserve again, so a page refresh does not lose their hold", async () => {
     const { variantId } = await makeProduct();
     await reserveVariant(variantId, "buyer");
 
@@ -145,6 +145,45 @@ describe("reserveVariant", () => {
 
     expect(again.ok).toBe(true);
     expect(await db.stockHold.count()).toBe(1);
+  });
+
+  it("keeps a live hold's deadline, so refreshing never buys more time", async () => {
+    // Due at 17:30; a refresh at 17:27 must not move it to 17:42, or the last
+    // unit could be kept off sale indefinitely without paying.
+    const { variantId } = await makeProduct();
+    const start = new Date();
+    const first = await reserveVariant(variantId, "buyer", 1, start);
+
+    const later = new Date(start.getTime() + 12 * 60_000);
+    const again = await reserveVariant(variantId, "buyer", 1, later);
+
+    expect(first.ok && again.ok).toBe(true);
+    if (!first.ok || !again.ok) return;
+    expect(again.reservedUntil).toEqual(first.reservedUntil);
+    const hold = await db.stockHold.findFirstOrThrow({ where: { variantId } });
+    expect(hold.expiresAt).toEqual(first.reservedUntil);
+  });
+
+  it("keeps the deadline when the buyer changes how many they want", async () => {
+    const { variantId } = await makeProduct({}, { stock: 3 });
+    const start = new Date();
+    const first = await reserveVariant(variantId, "buyer", 1, start);
+
+    const again = await reserveVariant(variantId, "buyer", 2, new Date(start.getTime() + 60_000));
+
+    expect(again.ok && again.quantity).toBe(2);
+    expect(first.ok && again.ok && again.reservedUntil).toEqual(first.ok && first.reservedUntil);
+  });
+
+  it("starts a new window once the old hold has run out", async () => {
+    const { variantId } = await makeProduct();
+    const start = new Date();
+    await reserveVariant(variantId, "buyer", 1, start);
+
+    const after = new Date(start.getTime() + 16 * 60_000);
+    const again = await reserveVariant(variantId, "buyer", 1, after);
+
+    expect(again.ok && again.reservedUntil).toEqual(new Date(after.getTime() + 15 * 60_000));
   });
 
   it("asks for at least one, whatever it is passed", async () => {

@@ -104,6 +104,19 @@ Submitting a payment claim therefore **converts** the hold rather than ending it
 same mechanism, longer window. Deliberately not a second status, so the sweep,
 the catalogue query and checkout all keep working unchanged.
 
+## The deadline is set once
+
+Reserving again while a hold is live keeps its deadline. A hold due at 17:30
+is still due at 17:30 after a refresh at 17:27, after coming back from the
+order page, or after changing quantities. If every visit to checkout bought a
+fresh fifteen minutes, refreshing would keep the last unit off sale for as
+long as somebody cared to, without paying. Once a hold has run out, checking
+out again starts a new window, but only if the units are still free, and
+anyone else has had their chance in between.
+
+Only real progress towards paying extends a hold: sending an M-Pesa code (24
+hours, below), and later a payment prompt being sent.
+
 ## When a hold runs out before payment
 
 The hold protects the units; the order needs its own answer. An unpaid order

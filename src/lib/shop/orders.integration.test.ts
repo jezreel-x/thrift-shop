@@ -148,6 +148,14 @@ describe("beginCheckout", () => {
     expect(minutes).toBeLessThan(15.1);
   });
 
+  it("keeps the same deadline when the buyer comes back to checkout", async () => {
+    const { user, cartId } = await shopperWith([await makeProduct()]);
+    const first = await beginCheckout(user.id, cartId, BUYER);
+    const again = await beginCheckout(user.id, cartId, BUYER);
+
+    expect(first.ok && again.ok && again.heldUntil).toEqual(first.ok && first.heldUntil);
+  });
+
   it("starts a new order once the old one's holds ran out, and closes the old one", async () => {
     // The order from last week must not come back to life with today's cart:
     // same reference, last week's date, and a total nobody agreed to then.

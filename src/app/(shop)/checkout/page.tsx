@@ -35,8 +35,9 @@ export const metadata: Metadata = {
  *
  * Loading this page is not passive: it reserves everything in the cart that can
  * still be held, which is the moment a shortlist becomes a claim. Re-entering
- * while held finds the same order and extends the same holds rather than
- * opening a second; once the holds have run out, it starts a new order.
+ * while held finds the same order and the same holds, with the same deadline,
+ * rather than opening a second; once the holds have run out, it starts a new
+ * order.
  */
 export default async function CheckoutPage({ searchParams }: PageProps<"/checkout">) {
   // The first point in the shop that requires an account: a reservation has to

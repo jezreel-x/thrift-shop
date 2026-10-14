@@ -313,19 +313,43 @@ enum OrderStatus {
 enum PaymentChannel {
   // The buyer paid the till or paybill themselves and typed the M-Pesa code.
   MPESA_MANUAL
+  // The shop sent an M-Pesa prompt to the buyer's phone (Daraja STK Push).
+  MPESA_STK
 }
 
 // Where a payment stands. Separate from the order's state: a payment can be
 // received for an order that then needs refunding.
 enum PaymentStatus {
+  // A prompt was sent; Safaricom hasn't yet said how it ended.
+  PENDING
   // The buyer says they paid; nothing has verified it yet.
   CLAIMED
   // Verified: the money arrived.
   RECEIVED
+  // Safaricom says it wasn't paid: cancelled, timed out, a wrong PIN, not
+  // enough money.
+  FAILED
   // It didn't check out.
   REJECTED
   // Received, then sent back.
   REFUNDED
+}
+
+// What settled a payment. For reporting, never a gate: a payment's status is
+// what the shop acts on. Lets "how many prompts did Safaricom's callback
+// actually settle?" be answered, and keeps a payment staff confirmed by hand
+// apart from one Safaricom confirmed. They carry very different assurance.
+enum SettledVia {
+  // Safaricom's callback arrived, and asking Safaricom agreed with it.
+  CALLBACK
+  // Asked while the buyer's page waited for the result.
+  BUYER_PAGE
+  // Asked by the daily housekeeping.
+  HOUSEKEEPING
+  // Staff pressed "Check M-Pesa status".
+  STAFF_CHECK
+  // Staff decided by hand, from their own M-Pesa records.
+  STAFF
 }
 
 // A payment towards an order, however it was made. An order can have several:
@@ -354,6 +378,25 @@ model Payment {
   // How the money went back, in the owner's words ("Reversed, code SFK...").
   refundNote String?
   refundedAt DateTime?
+
+  // --- A prompt (MPESA_STK) ---
+  // Safaricom's handle for the prompt, returned when it is sent. How its
+  // callback and our questions about it find this row. Not a secret: never
+  // proof of anything on its own.
+  checkoutRequestId String? @unique
+  merchantRequestId String?
+  // Safaricom's verdict in its own words: 0 paid, 1032 cancelled, 1037 timed
+  // out, and so on. Kept for disputes.
+  resultCode        Int?
+  resultDesc        String?
+  // The callback as it arrived, because disputes happen after bugs.
+  callback          Json?
+  // When Safaricom was last asked about it, so asking can be spaced out.
+  checkedAt         DateTime?
+
+  // How and when it stopped being PENDING or CLAIMED.
+  settledVia SettledVia?
+  settledAt  DateTime?
 
   @@index([orderId, createdAt])
   @@index([status])

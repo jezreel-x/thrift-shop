@@ -1,9 +1,10 @@
 # Payments
 
 > **Status:** P1 built (12 October 2026): `settlePayment` (as `settleItemsIn` in
-> `src/lib/payments/settle.ts`), the `Payment` record, and Needs refund. P2 is
-> next. The detailed design for STK Push is in
-> [mpesa-stk-push.md](mpesa-stk-push.md).
+> `src/lib/payments/settle.ts`), the `Payment` record, and Needs refund. P2
+> built in the sandbox (14 October): M-Pesa prompts, "How will you pay?", and
+> settling by asking Safaricom; see [mpesa-stk-push.md](mpesa-stk-push.md). P3
+> is next.
 
 Today every payment is confirmed by a person. The buyer pays the shop's till,
 types the M-Pesa code into checkout, and staff find that payment in their own
@@ -107,7 +108,7 @@ Each phase ships on its own and leaves the shop working.
 | Phase     | What                                                                                                                                                                                                                                                         | Needs                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
 | **P1** ✅ | **Foundation.** "How will you pay?" at checkout (only the manual option until STK is ready); a payment record per order with its attempts; `settlePayment`, called by staff's Confirm; the `NEEDS_REFUND` state, its tab, and the buyer's message            | nothing new                   |
-| **P2**    | **STK Push, in the sandbox.** The Daraja client, sending the prompt, the callback (into `settlePayment`), and a cron that queries prompts with no callback after a few minutes (also into `settlePayment`). Detail in [mpesa-stk-push.md](mpesa-stk-push.md) | Daraja sandbox keys           |
+| **P2** ✅ | **STK Push, in the sandbox.** The Daraja client, sending the prompt, the callback (into `settlePayment`), and a cron that queries prompts with no callback after a few minutes (also into `settlePayment`). Detail in [mpesa-stk-push.md](mpesa-stk-push.md) | Daraja sandbox keys           |
 | **P3**    | **Verifying manual codes.** Record Safaricom's C2B confirmations; a typed code that matches, for the right amount, settles automatically. Pochi and unmatched codes still go to staff, through the same function                                             | the C2B URL registered        |
 | **P4**    | **An aggregator for cards** (Pesapal, Paystack or Flutterwave, compared when we get there). Its notification ends in `settlePayment`                                                                                                                         | a merchant account            |
 | **P5**    | **Going live, per shop.** The client's own till or paybill, its live keys, and one real small purchase end to end                                                                                                                                            | the client's go-live approval |

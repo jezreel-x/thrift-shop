@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { Permission } from "@/generated/prisma/enums";
+import { PaymentStatus, Permission, SettledVia } from "@/generated/prisma/enums";
+import { checkPrompt } from "../payments/stk";
+import { prisma } from "../prisma";
 import { requirePermission } from "./access";
 import { type DecisionResult, confirmOrder, markRefunded, rejectOrder } from "./orders";
 
@@ -74,6 +76,38 @@ function refusalMessage(result: Extract<DecisionResult, { ok: false }>): string 
     case "already-decided":
       return "Someone has already decided this order. Reload the page to see what happened.";
   }
+}
+
+export type CheckFormState = { notice?: string };
+
+/**
+ * "Check M-Pesa status": asks Safaricom how a prompt ended, now, rather than
+ * waiting for the callback or the daily housekeeping. Settles on Safaricom's
+ * answer, exactly as they do; staff can't decide a prompt by hand.
+ */
+export async function checkPromptAction(
+  _previous: CheckFormState,
+  formData: FormData,
+): Promise<CheckFormState> {
+  const { user } = await requirePermission(Permission.ORDERS_CONFIRM_PAYMENT);
+
+  const paymentId = String(formData.get("paymentId") ?? "");
+  const result = await checkPrompt(paymentId, SettledVia.STAFF_CHECK, { actorId: user.id });
+
+  if (!result.changed) {
+    return {
+      notice:
+        result.status === PaymentStatus.PENDING
+          ? "M-Pesa hasn't said how this prompt ended yet. Try again in a minute."
+          : "This prompt has already been settled. Reload the page to see how.",
+    };
+  }
+
+  const payment = await prisma.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: { order: { select: { reference: true } } },
+  });
+  showDecided(payment.order.reference);
 }
 
 /**

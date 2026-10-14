@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { deleteExpiredSessions } from "./auth/session";
+import { reconcilePrompts } from "./payments/stk";
 import { deleteAbandonedAnonymousCarts } from "./shop/cart";
 import { cancelLapsedCheckouts } from "./shop/orders";
 import { releaseExpiredReservations } from "./shop/reservations";
@@ -16,6 +17,11 @@ import { releaseExpiredReservations } from "./shop/reservations";
  * code and says so. That is deliberate: if this never ran, the shop would
  * behave exactly the same, only with bigger tables and a longer "Awaiting
  * payment" tab.
+ *
+ * One exception, done first: asking Safaricom about M-Pesa prompts nobody
+ * settled. The buyer's page settles nearly all of them while they wait; this is
+ * the backstop for a buyer who closed it and a callback that never came, so a
+ * paid prompt waits a day at most. Staff can ask sooner from the order page.
  */
 
 /**
@@ -26,6 +32,8 @@ import { releaseExpiredReservations } from "./shop/reservations";
 export const LAPSED_HOLD_GRACE_HOURS = 24;
 
 export type HousekeepingReport = {
+  /** M-Pesa prompts settled by asking Safaricom: paid or not. */
+  prompts: number;
   holds: number;
   sessions: number;
   carts: number;
@@ -38,6 +46,11 @@ export async function runHousekeeping(now: Date = new Date()): Promise<Housekeep
   // saying so, about as long as its lapsed holds stay visible.
   const cutoff = new Date(now.getTime() - LAPSED_HOLD_GRACE_HOURS * 3_600_000);
 
+  // First, and the one part that is not tidying: a prompt nobody settled may
+  // have been paid. Settled before anything is closed, so a paid order is
+  // confirmed rather than cancelled.
+  const prompts = await reconcilePrompts({ now });
+
   const [holds, sessions, carts, checkouts] = await Promise.all([
     releaseExpiredReservations(cutoff),
     deleteExpiredSessions(now),
@@ -45,7 +58,7 @@ export async function runHousekeeping(now: Date = new Date()): Promise<Housekeep
     cancelLapsedCheckouts(cutoff, now),
   ]);
 
-  return { holds, sessions, carts, checkouts };
+  return { prompts, holds, sessions, carts, checkouts };
 }
 
 /**

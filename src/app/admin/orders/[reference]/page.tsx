@@ -6,7 +6,15 @@ import { notFound } from "next/navigation";
 import { MarkRefunded } from "@/components/admin/mark-refunded";
 import { OrderDecision } from "@/components/admin/order-decision";
 import { OrderStatusBadge } from "@/components/admin/order-status-badge";
-import { OrderStatus, PaymentChannel, PaymentStatus, Permission } from "@/generated/prisma/enums";
+import { CheckPrompt } from "@/components/admin/check-prompt";
+import {
+  OrderStatus,
+  PaymentChannel,
+  PaymentStatus,
+  Permission,
+  SettledVia,
+} from "@/generated/prisma/enums";
+import { promptOutcome } from "@/lib/payments/stk";
 import { requirePermission } from "@/lib/admin/access";
 import { staffTitle } from "@/lib/admin/metadata";
 import { getOrderForReview } from "@/lib/admin/orders";
@@ -130,6 +138,30 @@ export default async function AdminOrderPage({ params }: Props) {
                         payment.refundedAt ?? payment.receivedAt ?? payment.createdAt,
                       )}
                     </span>
+                    {payment.channel === PaymentChannel.MPESA_STK && payment.phone && (
+                      <p className="w-full text-xs text-muted">
+                        Sent to <span className="tabular-nums">{formatPhone(payment.phone)}</span>
+                        {payment.status === PaymentStatus.FAILED &&
+                          ` · ${promptOutcome(payment.resultCode, payment.resultDesc)}`}
+                        {payment.status === PaymentStatus.RECEIVED &&
+                          !payment.receipt &&
+                          " · Paid, by M-Pesa's answer to our check; the receipt number comes only in the callback"}
+                      </p>
+                    )}
+                    {payment.settledVia && (
+                      <p className="w-full text-xs text-muted">
+                        {SETTLED_VIA_LABELS[payment.settledVia]}
+                      </p>
+                    )}
+                    {payment.status === PaymentStatus.PENDING &&
+                      payment.channel === PaymentChannel.MPESA_STK &&
+                      (can(access, Permission.ORDERS_CONFIRM_PAYMENT) ? (
+                        <CheckPrompt paymentId={payment.id} />
+                      ) : (
+                        <p className="w-full text-xs text-muted">
+                          Waiting for M-Pesa to say how the prompt ended.
+                        </p>
+                      ))}
                     {payment.refundNote && (
                       <p className="w-full text-xs text-muted">Refund: {payment.refundNote}</p>
                     )}
@@ -358,6 +390,13 @@ function describe(action: string, after: unknown): string {
       : "Payment confirmed";
   }
   if (action === "order.reject-payment") return "Payment rejected";
+  if (action === "order.prompt-paid") {
+    const { status, owedBack } = (after ?? {}) as { status?: unknown; owedBack?: unknown };
+    if (owedBack) return "Paid by M-Pesa prompt after the order was decided: owed back";
+    return status === OrderStatus.NEEDS_REFUND
+      ? "Paid by M-Pesa prompt, but an item had sold: refund due"
+      : "Paid by M-Pesa prompt";
+  }
   if (action === "order.mark-refunded") return "Refund sent";
   return action;
 }
@@ -402,11 +441,22 @@ function buyerMessage(
 
 const CHANNEL_LABELS: Record<PaymentChannel, string> = {
   [PaymentChannel.MPESA_MANUAL]: "M-Pesa, code entered by the buyer",
+  [PaymentChannel.MPESA_STK]: "M-Pesa prompt to the buyer's phone",
 };
 
 const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  [PaymentStatus.PENDING]: "Prompt sent",
   [PaymentStatus.CLAIMED]: "Claimed",
   [PaymentStatus.RECEIVED]: "Received",
+  [PaymentStatus.FAILED]: "Not paid",
   [PaymentStatus.REJECTED]: "Rejected",
   [PaymentStatus.REFUNDED]: "Refunded",
+};
+
+const SETTLED_VIA_LABELS: Record<SettledVia, string> = {
+  [SettledVia.CALLBACK]: "Settled by M-Pesa's callback, checked with M-Pesa",
+  [SettledVia.BUYER_PAGE]: "Settled by asking M-Pesa while the buyer waited",
+  [SettledVia.HOUSEKEEPING]: "Settled by asking M-Pesa in the daily check",
+  [SettledVia.STAFF_CHECK]: "Settled when staff asked M-Pesa",
+  [SettledVia.STAFF]: "Decided by staff, from their M-Pesa records",
 };

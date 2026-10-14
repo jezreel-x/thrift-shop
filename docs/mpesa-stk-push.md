@@ -1,9 +1,75 @@
 # M-Pesa STK Push
 
-> **Status:** proposed. Nothing here is built yet. This records the plan and
-> the reasoning behind it, so the implementation can be reviewed against it.
-> It is phase P2 of the wider payments plan in [payments.md](payments.md),
-> where late payments on every path are settled by one rule.
+> **Status:** built in the sandbox (P2, 14 October 2026): the Daraja client
+> (`src/lib/mpesa/`), sending and settling prompts (`src/lib/payments/stk.ts`),
+> the callback (`/api/payments/callback/[secret]`), the buyer's waiting page,
+> and staff's **Check M-Pesa status**. Verifying typed codes (C2B, below) is
+> P3. Going live is P5. See [payments.md](payments.md).
+>
+> The sections after "What was built" are the original plan, kept for its
+> reasoning; where the build differs, "What was built" wins.
+
+## What was built
+
+**Asking Safaricom is the main path; the callback is a shortcut.** A callback
+can simply never arrive (some bank-managed paybills only deliver results to the
+bank's own endpoint), and it is a public URL anyone can post to. So every path
+that learns how a prompt ended goes through one function, `checkPrompt`, which
+asks Safaricom (STK Query) and settles on that answer:
+
+| Path                   | When                                                                |
+| ---------------------- | ------------------------------------------------------------------- |
+| Safaricom's callback   | as soon as it arrives, if it does                                   |
+| The buyer's page       | polls every 4 s; asks Safaricom after 20 s, then at most every 10 s |
+| Staff                  | **Check M-Pesa status** on the order                                |
+| The daily housekeeping | any prompt still unsettled, before closing lapsed checkouts         |
+
+A forged "paid" is refused, a forged "cancelled" can't undo a real payment,
+and the payment's row is locked while it settles, so the four paths racing
+each other settle it once.
+
+**Safaricom's answer has three shapes, not two.** `classifyQuery` sorts it:
+
+- **settled**: code 0 is paid; anything else (1032 cancelled, 1037 timed out,
+  1 not enough money, 2001 wrong PIN) is not paid;
+- **still going**: Daraja's error `500.001.1001`, _and_ a non-zero result
+  whose description says it is still being processed. The second arrives in
+  the success shape and reads like a failure. Believing it tells a buyer who is
+  mid-payment that they failed, and they pay twice;
+- **unknown**: no usable answer (down, throttled, a timeout).
+
+Only "settled" changes anything; the other two are asked again later.
+
+**A paid prompt settles by the one rule** in `settle.ts`: sold if the units are
+still the buyer's or free, otherwise **Needs refund**. The order can be
+`AWAITING_PAYMENT` or `CANCELLED` (its hold ran out while the prompt was out);
+money arriving for an order already decided some other way is recorded,
+audited as owed back, and changes nothing else.
+
+**Sending is guarded.** The prompt is recorded as `PENDING` under the order's
+row lock before Safaricom is called, so pressing the button three times sends
+one prompt. While one is out, the buyer can't type a code too or rebuild the
+order at checkout (checkout sends them to the order's page). Sending extends
+the hold to at least five minutes from now: the one thing besides a typed code
+that extends a hold. A total that isn't whole shillings is never rounded:
+the prompt isn't offered.
+
+**Data:** prompts are rows in `Payment` (channel `MPESA_STK`), not a separate
+table: `checkoutRequestId` (unique), `merchantRequestId`, Safaricom's
+`resultCode`/`resultDesc`, the `callback` as received, `checkedAt`, and on
+every payment `settledVia` (callback, buyer's page, housekeeping, staff check,
+or staff by hand) with `settledAt`, so "how many prompts did the callback
+actually settle?" can be answered.
+
+**Switches:** prompts need `MPESA_ENABLED=true` as well as keys, so keys left in
+a `.env` never send prompts on their own; `MPESA_ENV=sandbox` refuses to run on
+Vercel's production environment; with live keys, checkout offers the prompt
+only if the money goes to the number checkout shows. Variables are listed in
+`.env.example`.
+
+**Not built, on purpose:** reviving a prompt already marked not paid. With the
+three-shape classification, "not paid" means Safaricom said so; if that ever
+proves wrong, staff can still settle the money by hand as a typed code.
 
 Today the shop confirms every payment by hand. The buyer pays the till
 themselves, types the M-Pesa code into checkout, and the owner matches it

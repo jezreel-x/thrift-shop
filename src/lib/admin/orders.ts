@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
+import { OrderStatus, PaymentStatus, SettledVia } from "@/generated/prisma/enums";
 import { normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 import { settleItemsIn } from "../payments/settle";
@@ -90,7 +90,12 @@ export async function confirmOrder(input: {
 
     await tx.payment.updateMany({
       where: { orderId: input.orderId, status: PaymentStatus.CLAIMED },
-      data: { status: PaymentStatus.RECEIVED, receivedAt: now },
+      data: {
+        status: PaymentStatus.RECEIVED,
+        receivedAt: now,
+        settledVia: SettledVia.STAFF,
+        settledAt: now,
+      },
     });
 
     await recordAudit(tx, {
@@ -176,9 +181,10 @@ export async function rejectOrder(input: {
   const reason = input.reason.trim();
 
   return prisma.$transaction(async (tx) => {
+    const now = new Date();
     const claimed = await claimDecision(tx, input.orderId, {
       status: OrderStatus.REJECTED,
-      reviewedAt: new Date(),
+      reviewedAt: now,
       reviewNote: reason,
     });
     if (!claimed.ok) return claimed;
@@ -191,7 +197,7 @@ export async function rejectOrder(input: {
     }
     await tx.payment.updateMany({
       where: { orderId: input.orderId, status: PaymentStatus.CLAIMED },
-      data: { status: PaymentStatus.REJECTED },
+      data: { status: PaymentStatus.REJECTED, settledVia: SettledVia.STAFF, settledAt: now },
     });
 
     await recordAudit(tx, {
@@ -358,6 +364,10 @@ export async function getOrderForReview(reference: string) {
           receivedAt: true,
           refundNote: true,
           refundedAt: true,
+          phone: true,
+          resultCode: true,
+          resultDesc: true,
+          settledVia: true,
         },
       },
       items: {

@@ -45,7 +45,13 @@ describe("runHousekeeping", () => {
     await db.cart.create({ data: { id: "stale" } });
     await db.$executeRaw`UPDATE "Cart" SET "updatedAt" = now() - interval '60 days' WHERE id IN ('mine', 'stale')`;
 
-    expect(await runHousekeeping(now)).toEqual({ holds: 1, sessions: 1, carts: 1, checkouts: 0 });
+    expect(await runHousekeeping(now)).toEqual({
+      prompts: 0,
+      holds: 1,
+      sessions: 1,
+      carts: 1,
+      checkouts: 0,
+    });
 
     expect(
       (await db.stockHold.findMany({ orderBy: { holder: "asc" } })).map((h) => h.holder),

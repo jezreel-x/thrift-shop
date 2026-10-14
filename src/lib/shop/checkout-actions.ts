@@ -8,7 +8,8 @@ import { clearCart } from "./cart";
 import { readCartId } from "./cart-session";
 import { type DeliveryField, parseDeliveryForm } from "./delivery";
 import { claimPayment } from "./orders";
-import { getDeliveryOptions } from "./settings";
+import { getDeliveryOptions, getPaymentDetails } from "./settings";
+import { type PromptRefusal, requestPrompt } from "../payments/stk";
 import { normalisePhone } from "../phone";
 import { prisma } from "../prisma";
 
@@ -69,6 +70,53 @@ function explain(reason: string): string {
       return "You have already sent a code for this order. We are checking it.";
     case "hold-lapsed":
       return "Your hold on one of these pieces ran out. Go back to your cart and start again.";
+    case "prompt-pending":
+      return "We've sent an M-Pesa prompt for this order. Wait for it to finish before paying another way.";
+    default:
+      return "We could not find that order.";
+  }
+}
+
+export type PromptFormState = { error?: string };
+
+/**
+ * Sends an M-Pesa prompt to the buyer's phone, then takes them to the order's
+ * page, which waits for it to end. See src/lib/payments/stk.ts.
+ */
+export async function requestPromptAction(
+  _previous: PromptFormState,
+  formData: FormData,
+): Promise<PromptFormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in?next=%2Fcheckout");
+
+  const result = await requestPrompt({
+    orderId: String(formData.get("orderId") ?? ""),
+    userId: user.id,
+    phone: String(formData.get("phone") ?? ""),
+    payment: await getPaymentDetails(),
+  });
+
+  if (!result.ok) return { error: explainPrompt(result.reason) };
+
+  redirect(`/orders/${result.reference}`);
+}
+
+function explainPrompt(reason: PromptRefusal): string {
+  switch (reason) {
+    case "bad-phone":
+      return "That is not a Kenyan mobile number. Try 0712 345 678.";
+    case "prompt-pending":
+      return "A prompt is already on its way to your phone. Wait for it to finish.";
+    case "hold-lapsed":
+      return "Your hold ran out, so these pieces are back on sale. Check out again to hold what's still free.";
+    case "not-payable":
+      return "This order isn't waiting for payment any more.";
+    case "refused":
+      return "M-Pesa couldn't send the prompt. Check the number, or pay the till yourself below.";
+    case "not-offered":
+    case "odd-amount":
+      return "We can't send a prompt for this order. Pay the till yourself below.";
     default:
       return "We could not find that order.";
   }

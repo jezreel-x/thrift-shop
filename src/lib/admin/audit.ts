@@ -24,6 +24,7 @@ export type AuditAction =
   | "order.confirm-payment"
   | "order.reject-payment"
   | "order.mark-refunded"
+  | "order.prompt-paid"
   | "settings.update-payment"
   | "settings.clear-payment"
   | "settings.update-whatsapp"

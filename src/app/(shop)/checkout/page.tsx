@@ -6,10 +6,12 @@ import { ContactForm } from "@/components/contact-form";
 import { DeliveryForm } from "@/components/delivery-form";
 import { OrderDelivery } from "@/components/order-delivery";
 import { PaymentClaimForm } from "@/components/payment-claim-form";
+import { PromptForm } from "@/components/prompt-form";
 import { WhileHeld } from "@/components/while-held";
 import { PaymentMethod } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatTime } from "@/lib/dates";
+import { promptsOffered } from "@/lib/payments/stk";
 import { readCartId } from "@/lib/shop/cart-session";
 import { formatPrice } from "@/lib/money";
 import { formatPhone } from "@/lib/phone";
@@ -115,10 +117,20 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
     delivery,
   );
 
+  // A prompt is out for this order: its page waits for it to end.
+  if (!result.ok && result.reason === "prompt-pending") redirect(`/orders/${result.reference}`);
   if (!result.ok) redirect("/cart");
 
-  const payment = await getPaymentDetails();
+  const [payment, { totalCents }] = await Promise.all([
+    getPaymentDetails(),
+    prisma.order.findUniqueOrThrow({
+      where: { id: result.orderId },
+      select: { totalCents: true },
+    }),
+  ]);
   const heldUntil = formatTime(result.heldUntil);
+  // Whole shillings only: Daraja takes no cents, and a total is never rounded.
+  const prompt = promptsOffered(payment) && totalCents % 100 === 0;
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -159,28 +171,46 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
         until={result.heldUntil.toISOString()}
         untilLabel={heldUntil}
       >
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Pay by M-Pesa</h2>
-
-          {payment ? (
-            <PaymentInstructions payment={payment} reference={result.reference} />
-          ) : (
-            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Payment details have not been set up yet, so this order cannot be paid for online.
-              Your pieces stay held until {heldUntil}.
-            </p>
-          )}
-        </section>
-
-        {payment && (
+        {prompt && payment ? (
           <section className="mt-10">
-            <h2 className="text-lg font-semibold">Then tell us</h2>
-            <p className="mt-2 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-              Paste the code from your M-Pesa message. We check it against the payment and confirm —
-              your pieces stay held while we do.
-            </p>
-            <PaymentClaimForm orderId={result.orderId} />
+            <h2 className="text-lg font-semibold">How will you pay?</h2>
+
+            <div className="mt-4 rounded-xl border border-neutral-900 p-4 dark:border-neutral-100">
+              <h3 className="font-medium">M-Pesa prompt to your phone</h3>
+              <p className="mt-1 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                The prompt names who you&rsquo;re paying. If it isn&rsquo;t{" "}
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+                  {payment.name}
+                </span>
+                , don&rsquo;t enter your PIN.
+              </p>
+              <PromptForm
+                orderId={result.orderId}
+                phone={formatPhone(user.phone)}
+                total={formatPrice(totalCents)}
+              />
+            </div>
+
+            {/* The fallback, for a prompt that won't come or a buyer who'd rather. */}
+            <details className="group mt-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+              <summary className="cursor-pointer text-sm font-medium select-none">
+                Or pay our {PAYMENT_NOUN[payment.method]} yourself, then enter the code
+              </summary>
+              <PaymentInstructions payment={payment} reference={result.reference} />
+              <p className="mt-6 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+                Then paste the code from your M-Pesa message. We check it against the payment and
+                confirm — your pieces stay held while we do.
+              </p>
+              <PaymentClaimForm orderId={result.orderId} />
+            </details>
           </section>
+        ) : (
+          <ManualPayment
+            payment={payment}
+            reference={result.reference}
+            orderId={result.orderId}
+            heldUntil={heldUntil}
+          />
         )}
       </WhileHeld>
 
@@ -191,6 +221,53 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
         Back to your cart
       </Link>
     </main>
+  );
+}
+
+const PAYMENT_NOUN: Record<PaymentMethod, string> = {
+  [PaymentMethod.TILL]: "till",
+  [PaymentMethod.PAYBILL]: "paybill",
+  [PaymentMethod.POCHI]: "number",
+};
+
+/** Paying the till by hand and typing the code: the only way when prompts aren't offered. */
+function ManualPayment({
+  payment,
+  reference,
+  orderId,
+  heldUntil,
+}: {
+  payment: PaymentDetails | null;
+  reference: string;
+  orderId: string;
+  heldUntil: string;
+}) {
+  return (
+    <>
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold">Pay by M-Pesa</h2>
+
+        {payment ? (
+          <PaymentInstructions payment={payment} reference={reference} />
+        ) : (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            Payment details have not been set up yet, so this order cannot be paid for online. Your
+            pieces stay held until {heldUntil}.
+          </p>
+        )}
+      </section>
+
+      {payment && (
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold">Then tell us</h2>
+          <p className="mt-2 mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+            Paste the code from your M-Pesa message. We check it against the payment and confirm —
+            your pieces stay held while we do.
+          </p>
+          <PaymentClaimForm orderId={orderId} />
+        </section>
+      )}
+    </>
   );
 }
 

@@ -4,11 +4,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { OrderBadge } from "@/components/order-badge";
-import { OrderStatus } from "@/generated/prisma/enums";
+import { PromptWatcher } from "@/components/prompt-watcher";
+import { OrderStatus, PaymentStatus } from "@/generated/prisma/enums";
 import { requireUser } from "@/lib/auth/current-user";
 import { OrderDelivery } from "@/components/order-delivery";
 import { formatTime } from "@/lib/dates";
 import { formatPrice } from "@/lib/money";
+import { latestPrompt, promptOutcome } from "@/lib/payments/stk";
+import { formatPhone } from "@/lib/phone";
 import { getOrder } from "@/lib/shop/orders";
 
 export const metadata: Metadata = {
@@ -24,6 +27,10 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
   // so it must not be the only thing between a stranger and somebody's order.
   const order = await getOrder(reference, user.id);
   if (!order) notFound();
+
+  const prompt =
+    order.status === OrderStatus.AWAITING_PAYMENT ? await latestPrompt(order.id) : null;
+  const waiting = prompt?.status === PaymentStatus.PENDING;
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6 lg:py-12">
@@ -43,11 +50,11 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
         <h1 className="font-mono text-2xl font-semibold tracking-tight">{order.reference}</h1>
         <OrderBadge
           status={order.status}
-          lapsed={order.status === OrderStatus.AWAITING_PAYMENT && !order.heldUntil}
+          lapsed={order.status === OrderStatus.AWAITING_PAYMENT && !order.heldUntil && !waiting}
         />
       </div>
 
-      <StatusExplanation order={order} />
+      <StatusExplanation order={order} prompt={prompt} />
 
       <ul className="mt-8 divide-y divide-neutral-200 border-y border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
         {order.items.map((item) => (
@@ -118,6 +125,7 @@ export default async function OrderPage({ params }: PageProps<"/orders/[referenc
  */
 function StatusExplanation({
   order,
+  prompt,
 }: {
   order: {
     status: OrderStatus;
@@ -126,8 +134,18 @@ function StatusExplanation({
     heldUntil: Date | null;
     payments: { refundNote: string | null }[];
   };
+  prompt: Prompt | null;
 }) {
-  if (order.status === OrderStatus.AWAITING_PAYMENT) return <Unpaid heldUntil={order.heldUntil} />;
+  if (order.status === OrderStatus.AWAITING_PAYMENT) {
+    return prompt?.status === PaymentStatus.PENDING ? (
+      <CheckYourPhone reference={order.reference} prompt={prompt} />
+    ) : (
+      <Unpaid
+        heldUntil={order.heldUntil}
+        failed={prompt?.status === PaymentStatus.FAILED ? prompt : null}
+      />
+    );
+  }
 
   const message = {
     [OrderStatus.PENDING_CONFIRMATION]:
@@ -165,9 +183,14 @@ function StatusExplanation({
  * this order would be refused. So the page says so before anyone pays, and
  * offers the way forward: checkout again, which holds whatever is still free.
  */
-function Unpaid({ heldUntil }: { heldUntil: Date | null }) {
+function Unpaid({ heldUntil, failed }: { heldUntil: Date | null; failed: Prompt | null }) {
   return (
     <div className="mt-4 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
+      {failed && (
+        <p role="alert" className="mb-2 font-medium text-neutral-900 dark:text-neutral-100">
+          {promptOutcome(failed.resultCode, failed.resultDesc)} Nothing was charged.
+        </p>
+      )}
       {heldUntil ? (
         <p>
           Your pieces are held until{" "}
@@ -187,8 +210,40 @@ function Unpaid({ heldUntil }: { heldUntil: Date | null }) {
         href="/checkout"
         className="mt-4 inline-block rounded-lg bg-neutral-900 px-4 py-2 font-medium text-white transition hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
       >
-        {heldUntil ? "Back to checkout" : "Check out again"}
+        {heldUntil ? (failed ? "Try again" : "Back to checkout") : "Check out again"}
       </Link>
+    </div>
+  );
+}
+
+type Prompt = NonNullable<Awaited<ReturnType<typeof latestPrompt>>>;
+
+/**
+ * An M-Pesa prompt is out: the buyer's next step is on their phone. Says which
+ * phone and how much, so a prompt for the wrong amount or to the wrong number is
+ * caught before the PIN, and waits for the answer.
+ */
+function CheckYourPhone({ reference, prompt }: { reference: string; prompt: Prompt }) {
+  return (
+    <div className="mt-4 rounded-xl border border-neutral-900 p-4 text-sm dark:border-neutral-100">
+      <p className="font-medium">Check your phone</p>
+      <p className="mt-1 text-neutral-600 dark:text-neutral-400">
+        We&rsquo;ve sent an M-Pesa prompt for{" "}
+        <span className="font-medium text-neutral-900 dark:text-neutral-100">
+          {formatPrice(prompt.amountCents)}
+        </span>
+        {prompt.phone && (
+          <>
+            {" "}
+            to <span className="tabular-nums">{formatPhone(prompt.phone)}</span>
+          </>
+        )}
+        . Enter your M-Pesa PIN to pay. Your pieces stay held while you do.
+      </p>
+      <PromptWatcher reference={reference} />
+      <noscript>
+        <p className="mt-3 text-xs">Reload this page once you&rsquo;ve entered your PIN.</p>
+      </noscript>
     </div>
   );
 }

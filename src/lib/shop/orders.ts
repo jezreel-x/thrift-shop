@@ -27,6 +27,9 @@ const REFERENCE_ATTEMPTS = 5;
 
 export type CheckoutRefusal = "empty-cart" | "nothing-available";
 
+/** A prompt is out for the open order: the buyer belongs on its page, not a rebuilt checkout. */
+export type CheckoutBusy = { ok: false; reason: "prompt-pending"; reference: string };
+
 export type CheckoutResult =
   | {
       ok: true;
@@ -39,7 +42,8 @@ export type CheckoutResult =
       /** When the holds run out, and with them the chance to pay for this order. */
       heldUntil: Date;
     }
-  | { ok: false; reason: CheckoutRefusal };
+  | { ok: false; reason: CheckoutRefusal }
+  | CheckoutBusy;
 
 /**
  * Turns the available part of a cart into an order, holding each item.
@@ -58,6 +62,10 @@ export type CheckoutResult =
  * Only inside the window. An order whose holds ran out is closed first, and
  * coming back after that starts a new order: reviving the old one would carry
  * its reference and its date into a checkout days later.
+ *
+ * Never while an M-Pesa prompt is out for the open order. Rebuilding it then
+ * could change what the buyer is in the middle of paying for, so checkout sends
+ * them to the order's page to wait for the prompt to end instead.
  */
 export async function beginCheckout(
   userId: string,
@@ -67,6 +75,16 @@ export async function beginCheckout(
   delivery: DeliveryChoice | null = null,
 ): Promise<CheckoutResult> {
   await cancelLapsedCheckout(userId);
+
+  const paying = await prisma.order.findFirst({
+    where: {
+      userId,
+      status: OrderStatus.AWAITING_PAYMENT,
+      payments: { some: { status: PaymentStatus.PENDING } },
+    },
+    select: { reference: true },
+  });
+  if (paying) return { ok: false, reason: "prompt-pending", reference: paying.reference };
 
   const cart = await getCartContents(cartId, userId);
 
@@ -256,7 +274,13 @@ export async function cancelLapsedCheckouts(cutoff: Date, now: Date = new Date()
   return count;
 }
 
-export type ClaimRefusal = "not-found" | "already-claimed" | "code-already-used" | "hold-lapsed";
+export type ClaimRefusal =
+  | "not-found"
+  | "already-claimed"
+  | "code-already-used"
+  | "hold-lapsed"
+  /** An M-Pesa prompt is out: paying the till as well could pay twice. */
+  | "prompt-pending";
 
 /**
  * Records the buyer's claim that they have paid.
@@ -287,6 +311,9 @@ export async function claimPayment(
   if (!order) return { ok: false, reason: "not-found" };
   if (order.status !== OrderStatus.AWAITING_PAYMENT) {
     return { ok: false, reason: "already-claimed" };
+  }
+  if (await prisma.payment.count({ where: { orderId, status: PaymentStatus.PENDING } })) {
+    return { ok: false, reason: "prompt-pending" };
   }
 
   // The whole order first, so a hold that ran out on one line doesn't leave
